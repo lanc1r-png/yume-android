@@ -218,6 +218,28 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
 
     pickRef = ::pickQuality
 
+    fun kodikDirect(v: PlayableVariant) {
+        scope.launch {
+            resolving = true
+            try {
+                val links = Kodik.resolve(v.url)
+                if (current?.uid != v.uid) return@launch
+                showWeb = false
+                qualities = links.map { PlayableVariant("${it.first}p", it.second) }
+                qualities.firstOrNull()?.let { pickQuality(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (current?.uid == v.uid) {
+                    note = "Прямой поток не получен (${e.message}). Открываю веб-плеер."
+                    showWeb = true
+                }
+            } finally {
+                resolving = false
+            }
+        }
+    }
+
     fun select(v: PlayableVariant) {
         note = null
         showWeb = false
@@ -227,28 +249,7 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
         subtitle = v.subtitle
         if (v.kodik) {
             releasePlayer()
-            if (Prefs.kodikDirect) {
-                scope.launch {
-                    resolving = true
-                    try {
-                        val links = Kodik.resolve(v.url)
-                        if (current?.uid != v.uid) return@launch
-                        qualities = links.map { PlayableVariant("${it.first}p", it.second) }
-                        qualities.firstOrNull()?.let { pickQuality(it) }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        if (current?.uid == v.uid) {
-                            note = "Прямой поток не получен (${e.message}). Открываю веб-плеер."
-                            showWeb = true
-                        }
-                    } finally {
-                        resolving = false
-                    }
-                }
-            } else {
-                showWeb = true
-            }
+            if (Prefs.kodikDirect) kodikDirect(v) else showWeb = true
         } else if (v.isWeb) {
             releasePlayer()
             showWeb = true
@@ -289,8 +290,8 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
             val r = Api.variants(ep.id)
             variants = r.variants
             val first = r.variants.firstOrNull { it.title == lastVoice } ?: r.variants.firstOrNull()
-            if (r.note.isNotEmpty()) note = r.note
             first?.let { select(it) }
+            if (r.note.isNotEmpty()) note = r.note
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -457,6 +458,11 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
                 OutlinedButton(onClick = { if (index > 0) index-- }, enabled = index > 0, modifier = Modifier.weight(1f)) { Text("Предыдущая") }
                 OutlinedButton(onClick = { if (index + 1 < episodes.size) index++ }, enabled = index + 1 < episodes.size, modifier = Modifier.weight(1f)) { Text("Следующая") }
             }
+            current?.takeIf { it.kodik && showWeb }?.let { v ->
+                OutlinedButton(onClick = { kodikDirect(v) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (resolving) "Получаю поток…" else "Если видео чёрное: открыть прямым потоком")
+                }
+            }
             OutlinedButton(onClick = { showComments = true }, modifier = Modifier.fillMaxWidth()) { Text("Комментарии к серии") }
         }
     }
@@ -470,6 +476,7 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun KodikWeb(url: String, onStream: (String) -> Unit, onFullscreen: () -> Boolean) {
+    var webError by remember { mutableStateOf<String?>(null) }
     val onStreamState = androidx.compose.runtime.rememberUpdatedState(onStream)
     val onFsState = androidx.compose.runtime.rememberUpdatedState(onFullscreen)
     var custom by remember { mutableStateOf<View?>(null) }
@@ -494,7 +501,18 @@ private fun KodikWeb(url: String, onStream: (String) -> Unit, onFullscreen: () -
                     settings.domStorageEnabled = true
                     settings.mediaPlaybackRequiresUserGesture = false
                     settings.userAgentString = Kodik.UA
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     webViewClient = object : WebViewClient() {
+                        override fun onReceivedError(v: WebView?, r: WebResourceRequest?, e: android.webkit.WebResourceError?) {
+                            if (r?.isForMainFrame == true) webError = "Веб-плеер: ${e?.description}"
+                        }
+
+                        override fun onReceivedHttpError(v: WebView?, r: WebResourceRequest?, e: WebResourceResponse?) {
+                            if (r?.url?.toString() == url) webError = "Веб-плеер: ответ ${e?.statusCode}"
+                        }
+
                         override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest?): WebResourceResponse? {
                             val u = r?.url?.toString()
                             if (u != null && (u.contains(".m3u8") || u.contains(".mp4")) && !u.contains(".ts?")) {
@@ -531,6 +549,9 @@ private fun KodikWeb(url: String, onStream: (String) -> Unit, onFullscreen: () -
             },
             modifier = Modifier.fillMaxSize(),
         )
+        webError?.let {
+            Text(it, Modifier.align(Alignment.Center).padding(16.dp), color = Color(0xFFFFA726))
+        }
         custom?.let { v ->
             AndroidView(
                 factory = { c ->

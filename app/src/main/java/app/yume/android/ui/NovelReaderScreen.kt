@@ -284,7 +284,6 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
         blocks = emptyList()
         pages = emptyList()
         pagesFor = -1
-        pagerState.scrollToPage(0)
         ReadStore.mark(title.readKey, ch.id)
         HistoryStore.recordChapter(title, ch.id, ch.title)
         val local = OfflineStore.blocks(title.id, ch.id)
