@@ -328,6 +328,7 @@ private fun OptionBlock(title: String, kind: String, list: List<NamedItem>, sele
 
 @Composable
 private fun FilterSheet(onDismiss: () -> Unit) {
+    val site = Site.of(Prefs.platform)
     val scope = rememberCoroutineScope()
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     LaunchedEffect(Unit) { CatalogModel.loadOptions() }
