@@ -44,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yume.android.Nav
+import app.yume.android.Prefs
+import app.yume.android.data.Site
 import app.yume.android.Route
 import app.yume.android.Router
 import app.yume.android.data.Api
@@ -81,6 +83,24 @@ object CatalogModel {
     fun filter() = CatalogFilter(query, sort, genres, tags, types, statuses)
 
     val activeCount: Int get() = genres.size + tags.size + types.size + statuses.size
+
+    private var loadedSite = ""
+
+    /** После смены платформы фильтры и список от прежнего сайта не подходят. */
+    fun syncSite() {
+        val k = Site.current.key
+        if (loadedSite == k) return
+        if (loadedSite.isNotEmpty()) {
+            query = ""
+            sort = Sort.RATING
+            resetFilters()
+            options = FilterOptions()
+            items.clear()
+            generation++
+            loading = false
+        }
+        loadedSite = k
+    }
 
     suspend fun reload() {
         generation++
@@ -148,7 +168,11 @@ fun CatalogScreen() {
     var showFilters by remember { mutableStateOf(false) }
     var rolling by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { if (CatalogModel.items.isEmpty()) CatalogModel.reload() }
+    val site = Site.of(Prefs.platform)
+    LaunchedEffect(site) {
+        CatalogModel.syncSite()
+        if (CatalogModel.items.isEmpty()) CatalogModel.reload()
+    }
 
     LaunchedEffect(Router.pendingQuery, Router.pendingSort) {
         var changed = false
@@ -220,7 +244,7 @@ fun CatalogScreen() {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Манга",
+                        site.title,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
@@ -324,7 +348,7 @@ private fun FilterSheet(onDismiss: () -> Unit) {
                         FilterChip(
                             selected = CatalogModel.sort == s,
                             onClick = { CatalogModel.sort = s },
-                            label = { Text(s.title) },
+                            label = { Text(s.label(site)) },
                         )
                     }
                 }

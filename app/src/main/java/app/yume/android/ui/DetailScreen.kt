@@ -54,6 +54,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.yume.android.Nav
+import app.yume.android.Prefs
+import app.yume.android.data.EpisodeShort
+import app.yume.android.data.HistoryStore
+import app.yume.android.data.ProgressStore
+import app.yume.android.data.Site
 import app.yume.android.Route
 import app.yume.android.data.Api
 import app.yume.android.data.Chapter
@@ -68,7 +73,9 @@ import kotlinx.coroutines.coroutineScope
 fun DetailScreen(initial: Title) {
     val ctx = LocalContext.current
     var t by remember { mutableStateOf(initial) }
+    val site = Site.of(Prefs.platform)
     var chapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }
+    var episodes by remember { mutableStateOf<List<EpisodeShort>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var reversed by remember { mutableStateOf(false) }
@@ -97,7 +104,12 @@ fun DetailScreen(initial: Title) {
             }
             val c = async {
                 try {
-                    Result.success(Api.chapters(slug))
+                    if (site.isAnime) {
+                        episodes = Api.episodes(initial.id)
+                        Result.success(emptyList<Chapter>())
+                    } else {
+                        Result.success(Api.chapters(slug))
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -109,11 +121,16 @@ fun DetailScreen(initial: Title) {
             }
             val res = c.await()
             val list = res.getOrNull()
-            if (list != null) chapters = list else error = res.exceptionOrNull()?.message ?: "Не удалось загрузить главы"
+            if (list != null) chapters = list else error = res.exceptionOrNull()?.message ?: "Не удалось загрузить список"
         }
         loading = false
     }
 
+    val histId = HistoryStore.items.firstOrNull { it.title.id == t.id }?.chapterId
+    val epResume = run {
+        val i = if (histId != null) episodes.indexOfFirst { it.id == histId } else -1
+        if (i >= 0) i else 0
+    }
     val resumeIndex = run {
         val last = ReadStore.lastChapter(t.readKey)
         val i = if (last != null) chapters.indexOfFirst { it.id == last } else -1
@@ -175,15 +192,32 @@ fun DetailScreen(initial: Title) {
                             t.ageRestriction?.title?.takeIf { it.isNotEmpty() }?.let { Pill(it) }
                             t.rateAvg?.let { Pill("★ $it") }
                             if (chapters.isNotEmpty()) Pill("${chapters.size} гл.")
+                            if (episodes.isNotEmpty()) Pill("${episodes.size} сер.")
                         }
                     }
                 }
             }
 
+            if (site.isAnime && episodes.isNotEmpty()) {
+                item {
+                    Button(
+                        onClick = { Nav.push(Route.Player(t, episodes, epResume)) },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text(
+                            if (histId == null) "Начать смотреть" else "Продолжить: ${episodes[epResume].title}",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
             if (chapters.isNotEmpty()) {
                 item {
                     Button(
-                        onClick = { Nav.push(Route.Reader(t, chapters, resumeIndex)) },
+                        onClick = { Nav.push(if (site.isRanobe) Route.Novel(t, chapters, resumeIndex) else Route.Reader(t, chapters, resumeIndex)) },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(16.dp),
                     ) {
@@ -226,7 +260,7 @@ fun DetailScreen(initial: Title) {
             t.authors?.takeIf { it.isNotEmpty() }?.let { au ->
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Автор", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (site.isAnime) "Автор оригинала" else "Автор", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             for (a in au) {
                                 val aid = a.id
@@ -276,8 +310,8 @@ fun DetailScreen(initial: Title) {
 
             item {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Главы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    if (chapters.size > 1) {
+                    Text(if (site.isAnime) "Серии" else "Главы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (chapters.size > 1 || episodes.size > 1) {
                         TextButton(onClick = { reversed = !reversed }) {
                             Text(if (reversed) "Сначала новые" else "Сначала старые")
                         }
@@ -295,11 +329,17 @@ fun DetailScreen(initial: Title) {
             error?.let { e ->
                 item { CenterMessage(e, retryText = "Повторить", onRetry = { tick++ }) }
             }
-            if (!loading && chapters.isEmpty() && error == null) {
-                item { CenterMessage("Глав пока нет") }
+            if (!loading && chapters.isEmpty() && episodes.isEmpty() && error == null) {
+                item { CenterMessage(if (site.isAnime) "Серий пока нет" else "Глав пока нет") }
+            }
+            if (site.isAnime) {
+                val list = episodes.indices.toList().let { if (reversed) it.reversed() else it }
+                items(list, key = { "e-" + episodes[it].id }) { i ->
+                    EpisodeRow(episodes[i]) { Nav.push(Route.Player(t, episodes, i)) }
+                }
             }
 
-            val shownGroups = if (reversed) groups.reversed() else groups
+            val shownGroups = if (site.isAnime) emptyList() else if (reversed) groups.reversed() else groups
             for ((volume, indices) in shownGroups) {
                 item(key = "v-$volume") {
                     Text(
@@ -311,7 +351,9 @@ fun DetailScreen(initial: Title) {
                 }
                 val ordered = if (reversed) indices.reversed() else indices
                 items(ordered, key = { chapters[it].id }) { i ->
-                    ChapterRow(t, chapters[i]) { Nav.push(Route.Reader(t, chapters, i)) }
+                    ChapterRow(t, chapters[i], chapters, site) {
+                        Nav.push(if (site.isRanobe) Route.Novel(t, chapters, i) else Route.Reader(t, chapters, i))
+                    }
                 }
             }
         }
@@ -321,14 +363,14 @@ fun DetailScreen(initial: Title) {
         CommentsSheet(
             title = "Комментарии",
             postId = t.id,
-            postType = "manga",
+            postType = site.postType,
             onDismiss = { showComments = false },
         )
     }
 }
 
 @Composable
-private fun ChapterRow(t: Title, c: Chapter, onClick: () -> Unit) {
+private fun ChapterRow(t: Title, c: Chapter, all: List<Chapter>, site: Site, onClick: () -> Unit) {
     val isRead = ReadStore.isRead(t.readKey, c.id)
     Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.padding(10.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -366,9 +408,39 @@ private fun ChapterRow(t: Title, c: Chapter, onClick: () -> Unit) {
                     Text("Прочитано", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            if (site.isRanobe) ChapterDownloadButton(t, c, all)
             if (isRead) {
                 Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.outline)
             }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeRow(e: EpisodeShort, onClick: () -> Unit) {
+    val p = ProgressStore.get(e.id)
+    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    e.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (p?.finished == true) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+                val status = when {
+                    p == null -> null
+                    p.finished -> "Просмотрено"
+                    p.position > 5 -> {
+                        val sec = p.position.toInt()
+                        "Остановились на %d:%02d".format(sec / 60, sec % 60)
+                    }
+                    else -> "Открывали"
+                }
+                status?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            if (p?.finished == true) Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.outline)
         }
     }
 }

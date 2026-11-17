@@ -79,10 +79,10 @@ data class Title(
     val coverLarge: String?
         get() = J.normalizeUrl(cover?.default ?: cover?.md ?: cover?.thumbnail)
 
-    /** Ключ в хранилище прочитанного: у манги id отрицательный, как в iOS. */
-    val readKey: Int get() = -id
+    /** Ключ в хранилище прочитанного: у манги id отрицательный (у манги и ранобэ id тайтлов могут совпасть). */
+    val readKey: Int get() = if (Site.current.isManga) -id else id
 
-    val siteUrl: String? get() = slugUrl?.let { "https://mangalib.me/ru/manga/$it" }
+    val siteUrl: String? get() = slugUrl?.let { Site.current.titleUrlBase + it }
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -136,6 +136,13 @@ data class Title(
 }
 
 data class Chapter(val id: Int, val volume: String, val number: String, val name: String) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("volume", volume)
+        put("number", number)
+        put("name", name)
+    }
+
     val title: String get() = if (name.isEmpty()) "Глава $number" else "Глава $number · $name"
 
     companion object {
@@ -144,6 +151,26 @@ data class Chapter(val id: Int, val volume: String, val number: String, val name
             return Chapter(id, J.s(d.opt("volume")) ?: "1", J.s(d.opt("number")) ?: "0", J.str(d.opt("name")) ?: "")
         }
     }
+}
+
+data class EpisodeShort(val id: Int, val name: String?, val number: String?, val season: String?, val date: String?) {
+    val title: String
+        get() {
+            val n = number?.let { "Серия $it" } ?: "Серия"
+            return if (!name.isNullOrEmpty()) "$n · $name" else n
+        }
+
+    companion object {
+        fun from(d: JSONObject): EpisodeShort? {
+            val id = J.int(d.opt("id")) ?: return null
+            return EpisodeShort(id, J.str(d.opt("name")), J.s(d.opt("number")), J.s(d.opt("season")), J.str(d.opt("created_at")))
+        }
+    }
+}
+
+/** Позиция просмотра серии. updated: секунды от 2001-01-01, как в iOS. */
+data class WatchProgress(val position: Double, val duration: Double, val updated: Double) {
+    val finished: Boolean get() = duration > 0 && position / duration > 0.92
 }
 
 data class MangaPage(val id: Int, val urls: List<String>, val width: Float, val height: Float) {

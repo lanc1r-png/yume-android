@@ -17,12 +17,18 @@ object Prefs {
     const val KEY_TAPZONES = "manga.tapzones"
     const val KEY_AWAKE = "set.keepAwake"
     const val KEY_ACCENT = "android.accent"
+    const val KEY_RESUME = "set.resume"
+    const val KEY_AUTONEXT = "set.autoNext"
+    const val KEY_KODIK_DIRECT = "set.kodikDirect"
+    const val KEY_NOVEL_MODE = "novel.mode"
+    const val KEY_NOVEL_ANIM = "novel.anim"
+    const val KEY_OFF_WIFI = "off.wifi"
+    const val KEY_OFF_PREFETCH = "off.prefetch"
 
-    /** Пока работает только манга. */
-    val ACTIVE_PLATFORMS = setOf("manga")
+    val ACTIVE_PLATFORMS = setOf("anime", "ranobe", "manga")
 
     /** «anime», «ranobe» или «manga». */
-    var platform by mutableStateOf("manga")
+    var platform by mutableStateOf("anime")
         private set
 
     /** «system», «light» или «dark». */
@@ -47,17 +53,54 @@ object Prefs {
     var keepAwake by mutableStateOf(true)
         private set
 
+    var resume by mutableStateOf(true)
+        private set
+
+    var autoNext by mutableStateOf(true)
+        private set
+
+    var kodikDirect by mutableStateOf(false)
+        private set
+
+    /** Ранобэ: «pages» или «scroll». */
+    var novelMode by mutableStateOf("pages")
+        private set
+
+    var novelAnim by mutableStateOf("book")
+        private set
+
+    var offWifi by mutableStateOf(false)
+        private set
+
+    var offPrefetch by mutableStateOf(false)
+        private set
+
     /** Читает все значения из хранилища (после запуска и после восстановления копии). */
     fun reload() {
-        val saved = KV.getString(KEY_PLATFORM, "manga") ?: "manga"
-        platform = if (saved in ACTIVE_PLATFORMS) saved else "manga"
+        val saved = KV.getString(KEY_PLATFORM, "anime") ?: "anime"
+        platform = if (saved in ACTIVE_PLATFORMS) saved else "anime"
         theme = KV.getString(KEY_THEME, "system") ?: "system"
         mangaMode = KV.getString(KEY_MODE, "auto") ?: "auto"
         mangaAnim = KV.getString(KEY_ANIM, "slide") ?: "slide"
         accent = KV.getString(KEY_ACCENT, "dynamic") ?: "dynamic"
         tapZones = KV.getBool(KEY_TAPZONES, true)
         keepAwake = KV.getBool(KEY_AWAKE, true)
+        resume = KV.getBool(KEY_RESUME, true)
+        autoNext = KV.getBool(KEY_AUTONEXT, true)
+        kodikDirect = KV.getBool(KEY_KODIK_DIRECT, false)
+        novelMode = KV.getString(KEY_NOVEL_MODE, "pages") ?: "pages"
+        novelAnim = KV.getString(KEY_NOVEL_ANIM, "book") ?: "book"
+        offWifi = KV.getBool(KEY_OFF_WIFI, false)
+        offPrefetch = KV.getBool(KEY_OFF_PREFETCH, false)
     }
+
+    fun updateResume(v: Boolean) { resume = v; KV.putBool(KEY_RESUME, v) }
+    fun updateAutoNext(v: Boolean) { autoNext = v; KV.putBool(KEY_AUTONEXT, v) }
+    fun updateKodikDirect(v: Boolean) { kodikDirect = v; KV.putBool(KEY_KODIK_DIRECT, v) }
+    fun selectNovelMode(v: String) { novelMode = v; KV.putString(KEY_NOVEL_MODE, v) }
+    fun selectNovelAnim(v: String) { novelAnim = v; KV.putString(KEY_NOVEL_ANIM, v) }
+    fun updateOffWifi(v: Boolean) { offWifi = v; KV.putBool(KEY_OFF_WIFI, v) }
+    fun updateOffPrefetch(v: Boolean) { offPrefetch = v; KV.putBool(KEY_OFF_PREFETCH, v) }
 
     fun selectPlatform(value: String) {
         if (value !in ACTIVE_PLATFORMS) return

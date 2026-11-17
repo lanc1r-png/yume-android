@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.yume.android.data.Chapter
+import app.yume.android.data.EpisodeShort
 import app.yume.android.data.Sort
 import app.yume.android.data.Title
 import app.yume.android.ui.AuthorScreen
@@ -40,6 +41,8 @@ import app.yume.android.ui.CatalogScreen
 import app.yume.android.ui.DetailScreen
 import app.yume.android.ui.FavoritesScreen
 import app.yume.android.ui.HomeScreen
+import app.yume.android.ui.NovelReaderScreen
+import app.yume.android.ui.PlayerScreen
 import app.yume.android.ui.ReaderScreen
 import app.yume.android.ui.SettingsScreen
 
@@ -49,6 +52,8 @@ sealed class Route {
 
     class Detail(val title: Title) : Route()
     class Reader(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
+    class Player(val title: Title, val episodes: List<EpisodeShort>, val start: Int) : Route()
+    class Novel(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
     class Author(val authorId: Int, val name: String, val slug: String?) : Route()
 }
 
@@ -104,6 +109,8 @@ fun YumeApp() {
                         when (route) {
                             is Route.Detail -> DetailScreen(route.title)
                             is Route.Reader -> ReaderScreen(route, onClose = { Nav.pop() })
+                            is Route.Player -> PlayerScreen(route, onClose = { Nav.pop() })
+                            is Route.Novel -> NovelReaderScreen(route, onClose = { Nav.pop() })
                             is Route.Author -> AuthorScreen(route)
                         }
                     }

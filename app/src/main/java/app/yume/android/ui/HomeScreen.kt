@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yume.android.Nav
+import app.yume.android.Prefs
+import app.yume.android.data.Site
 import app.yume.android.Route
 import app.yume.android.Router
 import app.yume.android.data.Api
@@ -68,8 +70,21 @@ object HomeModel {
         null
     }
 
+    private var loadedFor = ""
+
     suspend fun load(force: Boolean = false) {
         if (loading) return
+        val key = Site.current.key
+        if (loadedFor != key) {
+            fresh = emptyList()
+            popular = emptyList()
+            newest = emptyList()
+            top = emptyList()
+            error = null
+            popularHasNext = true
+            popularPage = 1
+            loadedFor = key
+        }
         if (!force && fresh.isNotEmpty()) return
         loading = true
         try {
@@ -130,7 +145,8 @@ private fun PosterRow(list: List<Title>) {
 @Composable
 fun HomeScreen() {
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { HomeModel.load() }
+    val site = Site.of(Prefs.platform)
+    LaunchedEffect(site) { HomeModel.load() }
     var query by remember { mutableStateOf("") }
 
     LazyColumn(
@@ -142,7 +158,7 @@ fun HomeScreen() {
             Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Манга",
+                        site.title,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
@@ -180,7 +196,7 @@ fun HomeScreen() {
         if (HistoryStore.items.isNotEmpty()) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionHeader("Продолжить читать", actionText = "Очистить", onAction = { HistoryStore.clear() })
+                    SectionHeader(if (site.isAnime) "Продолжить смотреть" else "Продолжить читать", actionText = "Очистить", onAction = { HistoryStore.clear() })
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 14.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -196,7 +212,7 @@ fun HomeScreen() {
         if (HomeModel.fresh.isNotEmpty()) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionHeader("Свежие главы", onClick = { Router.openCatalog(sort = Sort.LAST) })
+                    SectionHeader(Sort.LAST.label(site), onClick = { Router.openCatalog(sort = Sort.LAST) })
                     PosterRow(HomeModel.fresh.take(14))
                 }
             }
@@ -205,7 +221,7 @@ fun HomeScreen() {
         if (HomeModel.popular.isNotEmpty()) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionHeader("Сейчас читают", onClick = { Router.openCatalog(sort = Sort.VIEWS) })
+                    SectionHeader(if (site.isAnime) "Сейчас смотрят" else "Сейчас читают", onClick = { Router.openCatalog(sort = Sort.VIEWS) })
                     Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         HomeModel.popular.forEachIndexed { i, t ->
                             TitleRow(t, rank = i + 1, onClick = { Nav.push(Route.Detail(t)) })

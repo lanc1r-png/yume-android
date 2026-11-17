@@ -16,6 +16,8 @@ class YumeApplication : Application(), SingletonImageLoader.Factory {
         KV.init(this)
         Prefs.reload()
         Stores.loadAll()
+        app.yume.android.data.OfflineStore.init(this)
+        app.yume.android.data.DownloadManager.init(this)
     }
 
     /** Картинки идут через клиент с Referer сайта: без него страницы манги не загружаются. */

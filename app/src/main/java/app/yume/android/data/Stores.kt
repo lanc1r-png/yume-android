@@ -30,6 +30,16 @@ object KV {
         def
     }
 
+    fun getFloat(key: String, def: Float): Float = try {
+        sp.getFloat(key, def)
+    } catch (e: ClassCastException) {
+        def
+    }
+
+    fun putFloat(key: String, value: Float) {
+        sp.edit().putFloat(key, value).apply()
+    }
+
     fun putString(key: String, value: String) {
         sp.edit().putString(key, value).apply()
     }
@@ -59,13 +69,12 @@ object KV {
     }
 }
 
-object FavoritesStore {
-    private const val KEY = "favorites.manga.v1"
+class TitleList(private val key: String) {
     val items = mutableStateListOf<Title>()
 
     fun load() {
         items.clear()
-        val s = KV.getString(KEY, null) ?: return
+        val s = KV.getString(key, null) ?: return
         try {
             items.addAll(JSONArray(s).objects().mapNotNull { Title.fromJson(it) })
         } catch (e: Exception) {
@@ -81,18 +90,48 @@ object FavoritesStore {
         save()
     }
 
+    fun clear() {
+        items.clear()
+        KV.remove(key)
+    }
+
     private fun save() {
-        KV.putString(KEY, JSONArray(items.map { it.toJson() }).toString())
+        KV.putString(key, JSONArray(items.map { it.toJson() }).toString())
     }
 }
 
-object HistoryStore {
-    private const val KEY = "history.manga.v1"
+/** Избранное: три отдельных списка по платформам, как в iOS. Обращения идут к списку текущей платформы. */
+object FavoritesStore {
+    private val anime = TitleList("favorites.v1")
+    private val novels = TitleList("favorites.novels.v1")
+    private val manga = TitleList("favorites.manga.v1")
+
+    private val current: TitleList
+        get() = when (Site.current) {
+            Site.ANIME -> anime
+            Site.RANOBE -> novels
+            Site.MANGA -> manga
+        }
+
+    val items get() = current.items
+
+    fun load() {
+        anime.load()
+        novels.load()
+        manga.load()
+    }
+
+    fun contains(t: Title): Boolean = current.contains(t)
+    fun toggle(t: Title) = current.toggle(t)
+    fun clear() = current.clear()
+}
+
+class HistoryList(private val key: String) {
     val items = mutableStateListOf<HistoryItem>()
 
     fun load() {
         items.clear()
-        val s = KV.getString(KEY, null) ?: return
+        val s = KV.getString(key, null) ?: return
         try {
             items.addAll(JSONArray(s).objects().mapNotNull { HistoryItem.from(it) })
         } catch (e: Exception) {
@@ -100,9 +139,9 @@ object HistoryStore {
         }
     }
 
-    fun recordChapter(title: Title, chapterId: Int, chapterTitle: String) {
+    fun record(title: Title, id: Int, text: String) {
         items.removeAll { it.title.id == title.id }
-        items.add(0, HistoryItem(title, chapterId, chapterTitle, HistoryItem.now()))
+        items.add(0, HistoryItem(title, id, text, HistoryItem.now()))
         while (items.size > 30) items.removeAt(items.lastIndex)
         save()
     }
@@ -118,7 +157,102 @@ object HistoryStore {
     }
 
     private fun save() {
-        KV.putString(KEY, JSONArray(items.map { it.toJson() }).toString())
+        KV.putString(key, JSONArray(items.map { it.toJson() }).toString())
+    }
+}
+
+/** История: «Продолжить смотреть / читать». Три списка по платформам. */
+object HistoryStore {
+    private val anime = HistoryList("history.v1")
+    private val novels = HistoryList("history.novels.v1")
+    private val manga = HistoryList("history.manga.v1")
+
+    private val current: HistoryList
+        get() = when (Site.current) {
+            Site.ANIME -> anime
+            Site.RANOBE -> novels
+            Site.MANGA -> manga
+        }
+
+    val items get() = current.items
+
+    fun load() {
+        anime.load()
+        novels.load()
+        manga.load()
+    }
+
+    fun recordChapter(title: Title, chapterId: Int, chapterTitle: String) = current.record(title, chapterId, chapterTitle)
+    fun recordEpisode(title: Title, ep: EpisodeShort) = current.record(title, ep.id, ep.title)
+    fun remove(titleId: Int) = current.remove(titleId)
+    fun clear() = current.clear()
+}
+
+/** Позиции просмотра серий (progress.v1). Экраны обновляются только при заметных изменениях. */
+object ProgressStore {
+    private const val KEY = "progress.v1"
+    private val map = HashMap<String, WatchProgress>()
+    private var version by androidx.compose.runtime.mutableIntStateOf(0)
+
+    fun load() {
+        map.clear()
+        try {
+            KV.getString(KEY, null)?.let { s ->
+                val o = JSONObject(s)
+                val it = o.keys()
+                while (it.hasNext()) {
+                    val k = it.next()
+                    val e = o.optJSONObject(k) ?: continue
+                    map[k] = WatchProgress(
+                        (J.clean(e.opt("position")) as? Number)?.toDouble() ?: 0.0,
+                        (J.clean(e.opt("duration")) as? Number)?.toDouble() ?: 0.0,
+                        (J.clean(e.opt("updated")) as? Number)?.toDouble() ?: 0.0,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // повреждённые данные игнорируем
+        }
+        version++
+    }
+
+    fun get(id: Int): WatchProgress? {
+        @Suppress("UNUSED_VARIABLE")
+        val v = version
+        return map[id.toString()]
+    }
+
+    fun position(id: Int): Double = map[id.toString()]?.position ?: 0.0
+
+    fun opened(id: Int) {
+        if (map[id.toString()] == null) {
+            map[id.toString()] = WatchProgress(0.0, 0.0, HistoryItem.now())
+            save()
+            version++
+        }
+    }
+
+    fun update(id: Int, position: Double, duration: Double) {
+        val k = id.toString()
+        val old = map[k]
+        val new = WatchProgress(position, duration, HistoryItem.now())
+        map[k] = new
+        save()
+        if (old == null || old.finished != new.finished || Math.abs(old.position - position) >= 30) version++
+    }
+
+    fun clear() {
+        map.clear()
+        KV.remove(KEY)
+        version++
+    }
+
+    private fun save() {
+        val o = JSONObject()
+        for ((k, v) in map) {
+            o.put(k, JSONObject().put("position", v.position).put("duration", v.duration).put("updated", v.updated))
+        }
+        KV.putString(KEY, o.toString())
     }
 }
 
@@ -221,6 +355,7 @@ object Stores {
     fun loadAll() {
         FavoritesStore.load()
         HistoryStore.load()
+        ProgressStore.load()
         ReadStore.load()
         SearchHistory.load()
     }

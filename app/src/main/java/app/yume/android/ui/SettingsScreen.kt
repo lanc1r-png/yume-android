@@ -50,6 +50,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yume.android.Prefs
+import app.yume.android.data.FavoritesStore
+import app.yume.android.data.OfflineStore
+import app.yume.android.data.ProgressStore
+import app.yume.android.data.Site
 import app.yume.android.data.Backup
 import app.yume.android.data.HistoryStore
 import app.yume.android.data.ReadStore
@@ -62,6 +66,14 @@ private data class PlatformTile(val key: String, val title: String)
 @Composable
 private fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+}
+
+@Composable
+private fun SwitchRow(text: String, value: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = value, onCheckedChange = onChange)
+    }
 }
 
 @Composable
@@ -199,6 +211,8 @@ fun SettingsScreen() {
             }
         }
 
+        val site = Site.of(Prefs.platform)
+        if (site.isManga) {
         SectionTitle("Чтение манги")
         Text("Режим по умолчанию", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -230,6 +244,48 @@ fun SettingsScreen() {
                 )
             }
             Switch(checked = Prefs.tapZones, onCheckedChange = { Prefs.updateTapZones(it) })
+        }
+        }
+        if (site.isRanobe) {
+            SectionTitle("Чтение ранобэ")
+            Text("Режим", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((key, label) in listOf("pages" to "Страницы", "scroll" to "Прокрутка")) {
+                    FilterChip(selected = Prefs.novelMode == key, onClick = { Prefs.selectNovelMode(key) }, label = { Text(label) })
+                }
+            }
+            Text("Листание", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((key, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно", "book" to "Как в книге")) {
+                    FilterChip(selected = Prefs.novelAnim == key, onClick = { Prefs.selectNovelAnim(key) }, label = { Text(label) })
+                }
+            }
+            Text(
+                "В режиме «Страницы» глава режется на страницы по размеру экрана. Размер шрифта и тему можно менять в самой читалке.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SectionTitle("Загрузки")
+            Text(
+                "Скачано глав: ${OfflineStore.totalChapters()} · ${OfflineStore.sizeText()}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            SwitchRow("Скачивать только по Wi‑Fi", Prefs.offWifi) { Prefs.updateOffWifi(it) }
+            SwitchRow("Докачивать 3 следующие главы при чтении", Prefs.offPrefetch) { Prefs.updateOffPrefetch(it) }
+            if (OfflineStore.totalChapters() > 0) {
+                OutlinedButton(onClick = { confirm = "offline" }) { Text("Удалить все загрузки") }
+            }
+        }
+        if (site.isAnime) {
+            SectionTitle("Просмотр")
+            SwitchRow("Продолжать с места остановки", Prefs.resume) { Prefs.updateResume(it) }
+            SwitchRow("Следующая серия сама после конца", Prefs.autoNext) { Prefs.updateAutoNext(it) }
+            SwitchRow("Kodik: сразу прямой плеер, без веб-плеера", Prefs.kodikDirect) { Prefs.updateKodikDirect(it) }
+            Text(
+                "Kodik открывается в веб-плеере: выбери качество и нажми «на весь экран», тогда включится обычный плеер приложения.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Не гасить экран при чтении", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
@@ -269,18 +325,36 @@ fun SettingsScreen() {
         SectionTitle("Данные")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { confirm = "history" }) { Text("Очистить историю") }
-            OutlinedButton(onClick = { confirm = "read" }) { Text("Сбросить «прочитано»") }
+            OutlinedButton(onClick = { confirm = "read" }) { Text(if (site.isAnime) "Сбросить прогресс просмотра" else "Сбросить «прочитано»") }
+            OutlinedButton(onClick = { confirm = "fav" }) { Text("Очистить избранное") }
         }
     }
 
     confirm?.let { what ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text(if (what == "history") "Очистить историю?" else "Сбросить отметки «прочитано»?") },
+            title = {
+                Text(
+                    when (what) {
+                        "history" -> "Очистить историю?"
+                        "offline" -> "Удалить все скачанные главы?"
+                        "fav" -> "Очистить избранное?"
+                        else -> "Сбросить отметки?"
+                    },
+                )
+            },
             text = { Text("Это действие нельзя отменить.") },
             confirmButton = {
                 TextButton(onClick = {
-                    if (what == "history") HistoryStore.clear() else ReadStore.clear()
+                    when (what) {
+                        "history" -> HistoryStore.clear()
+                        "offline" -> OfflineStore.removeAll()
+                        "fav" -> FavoritesStore.clear()
+                        else -> {
+                            ReadStore.clear()
+                            ProgressStore.clear()
+                        }
+                    }
                     confirm = null
                 }) { Text("Да") }
             },

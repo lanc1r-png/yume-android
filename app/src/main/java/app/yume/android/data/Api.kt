@@ -10,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class ApiException(val code: Int, val body: String) : Exception("Сервер вернул ошибку $code: $body")
 
@@ -18,7 +19,20 @@ enum class Sort(val raw: String, val title: String, val aliases: List<String>) {
     VIEWS("views", "По просмотрам", listOf("views")),
     NEWEST("created_at", "Новинки", listOf("created_at")),
     LAST("last_episode_at", "Свежие главы", listOf("last_chapter_at", "last_episode_at")),
-    NAME("name", "По названию", listOf("name", "rus_name")),
+    NAME("name", "По названию", listOf("name", "rus_name"));
+
+    fun label(site: Site): String = when (this) {
+        VIEWS -> if (site.isAnime) "По просмотрам" else "По чтению"
+        LAST -> if (site.isAnime) "Свежие серии" else "Свежие главы"
+        else -> title
+    }
+
+    /** Названия полей сортировки у разных сайтов отличаются, пробуем по очереди. */
+    fun aliasesFor(site: Site): List<String> = when {
+        this == LAST && site.isAnime -> listOf("last_episode_at", "last_chapter_at")
+        site.isBook -> aliases
+        else -> aliases
+    }
 }
 
 data class CatalogFilter(
@@ -43,13 +57,35 @@ data class FilterOptions(
 
 data class CatalogPage(val items: List<Title>, val hasNext: Boolean)
 
+data class VideoServer(val id: String?, val label: String?, val url: String)
+
+data class VariantsResult(val variants: List<PlayableVariant>, val note: String)
+
+private val variantCounter = AtomicInteger(0)
+
+/** Вариант воспроизведения: озвучка с набором качеств или веб-плеер (Kodik и др.). */
+data class PlayableVariant(
+    val title: String,
+    val url: String,
+    val subtitle: String? = null,
+    val isWeb: Boolean = false,
+    val kodik: Boolean = false,
+    val player: String = "",
+    val options: List<PlayableVariant> = emptyList(),
+    val alts: List<String> = emptyList(),
+    val uid: Int = variantCounter.incrementAndGet(),
+)
+
 object Api {
     private const val BASE = "https://api.cdnlibs.org/api"
-    const val REFERER = "https://mangalib.me/"
-    private const val ORIGIN = "https://mangalib.me"
-    private const val SITE_ID = "1"
     const val UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36"
+
+    /** Заголовки для видео Animelib (как в iOS-версии). */
+    val playbackHeaders: Map<String, String> = mapOf(
+        "Referer" to "https://v5.animelib.org/",
+        "Origin" to "https://v5.animelib.org",
+    )
 
     /** Токен входа (вход в аккаунт появится позже). */
     @Volatile
@@ -60,11 +96,13 @@ object Api {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /** Клиент для картинок: страницы манги требуют Referer сайта. */
+    val httpClient: OkHttpClient get() = client
+
+    /** Клиент для картинок: страницы манги и иллюстрации ранобэ требуют Referer сайта. */
     val imageClient: OkHttpClient = client.newBuilder()
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
-                .header("Referer", REFERER)
+                .header("Referer", Site.current.referer)
                 .header("User-Agent", UA)
                 .build()
             chain.proceed(req)
@@ -77,13 +115,14 @@ object Api {
         method: String = "GET",
         json: JSONObject? = null,
     ): String = withContext(Dispatchers.IO) {
+        val site = Site.current
         val builder = "$BASE$path".toHttpUrl().newBuilder()
         for ((k, v) in query) builder.addQueryParameter(k, v)
         val rb = Request.Builder()
             .url(builder.build())
-            .header("Referer", REFERER)
-            .header("Origin", ORIGIN)
-            .header("Site-Id", SITE_ID)
+            .header("Referer", site.referer)
+            .header("Origin", site.origin)
+            .header("Site-Id", site.id)
             .header("Accept", "application/json")
         token?.let { rb.header("Authorization", "Bearer $it") }
         if (method == "GET") {
@@ -106,11 +145,12 @@ object Api {
     // ---- Каталог ----
 
     suspend fun catalog(f: CatalogFilter, page: Int): CatalogPage {
+        val site = Site.current
         var lastError: Throwable = IllegalStateException("Не удалось загрузить каталог")
-        for (sort in f.sort.aliases) {
+        for (sort in f.sort.aliasesFor(site)) {
             for (withSite in listOf(true, false)) {
                 try {
-                    return fetchCatalog(f, page, withSite, sort)
+                    return fetchCatalog(site, f, page, withSite, sort)
                 } catch (e: ApiException) {
                     if (e.code == 422 || e.code == 400) lastError = e else throw e
                 }
@@ -119,19 +159,19 @@ object Api {
         throw lastError
     }
 
-    private suspend fun fetchCatalog(f: CatalogFilter, page: Int, withSite: Boolean, sort: String): CatalogPage {
+    private suspend fun fetchCatalog(site: Site, f: CatalogFilter, page: Int, withSite: Boolean, sort: String): CatalogPage {
         val q = ArrayList<Pair<String, String>>()
         q.add("page" to page.toString())
         q.add("sort_by" to sort)
         q.add("sort_type" to "desc")
-        if (withSite) q.add("site_id[]" to SITE_ID)
+        if (withSite) q.add("site_id[]" to site.id)
         val text = f.query.trim()
         if (text.isNotEmpty()) q.add("q" to text)
         for (id in f.genres.sorted()) q.add("genres[]" to id.toString())
         for (id in f.tags.sorted()) q.add("tags[]" to id.toString())
         for (id in f.types.sorted()) q.add("types[]" to id.toString())
         for (id in f.statuses.sorted()) q.add("status[]" to id.toString())
-        val root = rawRoot("/manga", q)
+        val root = rawRoot(site.apiPath, q)
         val items = root.optJSONArray("data").objects().mapNotNull { Title.fromJson(it) }
         val hasNext = root.optJSONObject("meta")?.opt("has_next_page") as? Boolean ?: items.isNotEmpty()
         return CatalogPage(items, hasNext)
@@ -175,19 +215,19 @@ object Api {
 
     // ---- Все тайтлы автора ----
 
-    @Volatile
-    private var authorKnown: String? = null
+    private val authorKnown = HashMap<String, String>()
 
     private suspend fun listRun(extra: List<Pair<String, String>>, page: Int): CatalogPage {
+        val site = Site.current
         for (withSite in listOf(true, false)) {
             val q = ArrayList<Pair<String, String>>()
             q.add("page" to page.toString())
             q.add("sort_by" to "rate_avg")
             q.add("sort_type" to "desc")
             q.addAll(extra)
-            if (withSite) q.add("site_id[]" to SITE_ID)
+            if (withSite) q.add("site_id[]" to site.id)
             try {
-                val root = rawRoot("/manga", q)
+                val root = rawRoot(site.apiPath, q)
                 val items = root.optJSONArray("data").objects().mapNotNull { Title.fromJson(it) }
                 val hasNext = root.optJSONObject("meta")?.opt("has_next_page") as? Boolean ?: items.isNotEmpty()
                 return CatalogPage(items, hasNext)
@@ -203,7 +243,8 @@ object Api {
      * (по id и по slug) и принимаем тот, что реально меняет выдачу.
      */
     suspend fun byAuthor(id: Int, slug: String?, page: Int): CatalogPage {
-        authorKnown?.let { known ->
+        val siteKey = Site.current.key
+        authorKnown[siteKey]?.let { known ->
             val parts = known.split("|")
             val value = if (parts.size > 1 && parts[1] == "slug") (slug ?: id.toString()) else id.toString()
             return listRun(listOf(parts[0] to value), page)
@@ -228,7 +269,7 @@ object Api {
                     val r = listRun(listOf(name to value), page)
                     val ids = r.items.map { it.id }
                     if (ids.isNotEmpty() && ids != baseline) {
-                        authorKnown = "$name|$kind"
+                        authorKnown[siteKey] = "$name|$kind"
                         return r
                     }
                 } catch (e: ApiException) {
@@ -241,26 +282,36 @@ object Api {
         throw ApiException(404, "Фильтр по автору не сработал")
     }
 
-    // ---- Тайтл и главы ----
+    // ---- Тайтл ----
 
     suspend fun details(slug: String): Title {
         val base = listOf("summary", "genres", "authors", "otherNames")
         fun q(fields: List<String>) = fields.map { "fields[]" to it }
+        val path = Site.current.apiPath + "/" + slug
         val data = try {
-            rawRoot("/manga/$slug", q(base + "rate_avg"))
+            rawRoot(path, q(base + "rate_avg"))
         } catch (e: ApiException) {
-            rawRoot("/manga/$slug", q(base))
+            rawRoot(path, q(base))
         }
         val d = data.optJSONObject("data") ?: throw ApiException(0, "Нет данных о тайтле")
         return Title.fromJson(d) ?: throw ApiException(0, "Нет данных о тайтле")
     }
+
+    // ---- Ранобэ и манга: главы ----
 
     suspend fun chapters(slug: String): List<Chapter> {
         val root = rawRoot("/manga/$slug/chapters")
         return root.optJSONArray("data").objects().mapNotNull { Chapter.from(it) }
     }
 
-    // ---- Страницы манги ----
+    fun chapterPath(slug: String) = "/manga/$slug/chapter"
+
+    fun chapterQuery(ch: Chapter) = listOf("number" to ch.number, "volume" to ch.volume)
+
+    /** Ответ сайта с текстом главы как есть (для чтения и для скачивания). */
+    suspend fun chapterRaw(slug: String, ch: Chapter): String = raw(chapterPath(slug), chapterQuery(ch))
+
+    // ---- Манга: страницы ----
 
     @Volatile
     private var cachedBases: List<String>? = null
@@ -307,7 +358,7 @@ object Api {
     }
 
     suspend fun pages(slug: String, ch: Chapter): List<MangaPage> {
-        val root = rawRoot("/manga/$slug/chapter", listOf("number" to ch.number, "volume" to ch.volume))
+        val root = J.parse(chapterRaw(slug, ch)) as? JSONObject ?: throw ApiException(0, "Некорректный ответ сервера")
         val d = root.optJSONObject("data") ?: throw ApiException(0, "Глава недоступна")
         val raw = d.optJSONArray("pages").objects()
         val bases = imageBases()
@@ -324,6 +375,109 @@ object Api {
             out.add(MangaPage(out.size, urls.toList(), num(p.opt("width")), num(p.opt("height"))))
         }
         return out
+    }
+
+    // ---- Аниме: серии и видео ----
+
+    suspend fun episodes(animeId: Int): List<EpisodeShort> {
+        val root = rawRoot("/episodes", listOf("anime_id" to animeId.toString()))
+        return root.optJSONArray("data").objects().mapNotNull { EpisodeShort.from(it) }
+    }
+
+    @Volatile
+    private var cachedServers: List<VideoServer>? = null
+
+    private suspend fun videoServers(): List<VideoServer> {
+        cachedServers?.let { if (it.isNotEmpty()) return it }
+        val root = rawRoot("/constants", listOf("fields[]" to "videoServers"))
+        val d = root.optJSONObject("data") ?: root
+        val list = d.optJSONArray("videoServers").objects().mapNotNull { e ->
+            val u = J.str(e.opt("url")) ?: return@mapNotNull null
+            VideoServer(J.str(e.opt("id")), J.str(e.opt("label")), u)
+        }
+        if (list.isNotEmpty()) cachedServers = list
+        return list
+    }
+
+    private fun absolute(href: String, base: String): String {
+        if (href.startsWith("http")) return href
+        if (href.startsWith("//")) return "https:$href"
+        val b = base.trimEnd('/')
+        val h = if (href.startsWith("/")) href else "/$href"
+        return "$b$h"
+    }
+
+    suspend fun variants(episodeId: Int): VariantsResult {
+        val text = raw("/episodes/$episodeId")
+        val servers = try {
+            videoServers()
+        } catch (e: ApiException) {
+            emptyList()
+        } catch (e: java.io.IOException) {
+            emptyList()
+        }
+        val mainServer = servers.firstOrNull { (it.id ?: "").lowercase().contains("main") } ?: servers.firstOrNull()
+        val base: String? = mainServer?.url
+        val otherBases = servers.map { it.url }.filter { it != base }
+
+        val root = J.parse(text) as? JSONObject ?: throw ApiException(0, "Некорректный ответ сервера")
+        val d = root.optJSONObject("data") ?: root
+        val players = d.optJSONArray("players").objects()
+
+        val native = ArrayList<PlayableVariant>()
+        val web = ArrayList<PlayableVariant>()
+        val seen = LinkedHashMap<String, Int>()
+        for (p in players) {
+            val name = J.str(p.opt("player")) ?: ""
+            seen[name] = (seen[name] ?: 0) + 1
+            val team = J.str(p.optJSONObject("team")?.opt("name")) ?: "—"
+            val tt = p.optJSONObject("translation_type")
+            val kind = J.str(tt?.opt("label")) ?: J.str(tt?.opt("title")) ?: J.str(tt?.opt("name")) ?: ""
+            val label = if (kind.isEmpty()) team else "$team ($kind)"
+
+            if (name.lowercase() == "animelib") {
+                if (base == null) continue
+                val video = p.optJSONObject("video")
+                val list = video?.optJSONArray("quality").objects()
+                val sub = p.optJSONArray("subtitles").objects().firstOrNull()?.let { J.str(it.opt("src")) }
+                    ?.let { absolute(it, base) }
+                val options = ArrayList<PlayableVariant>()
+                for (q in list.sortedByDescending { J.int(it.opt("quality")) ?: 0 }) {
+                    val href = J.str(q.opt("href")) ?: continue
+                    val h = J.int(q.opt("quality"))?.let { "${it}p" } ?: "—"
+                    options.add(
+                        PlayableVariant(
+                            title = h,
+                            url = absolute(href, base),
+                            subtitle = sub,
+                            alts = otherBases.map { absolute(href, it) },
+                        ),
+                    )
+                }
+                val best = options.firstOrNull() ?: continue
+                native.add(PlayableVariant(title = label, url = best.url, subtitle = sub, player = "Animelib", options = options))
+            } else {
+                val src = J.str(p.opt("src")) ?: continue
+                val full = if (src.startsWith("//")) "https:$src" else src
+                val isK = full.contains("kodik")
+                val pn = name.ifEmpty { "Плеер" }
+                web.add(PlayableVariant(title = "$label · $pn", url = full, isWeb = true, kodik = isK, player = pn))
+            }
+        }
+
+        var note = ""
+        if (native.isEmpty()) {
+            val list = seen.entries.sortedBy { it.key }.joinToString(", ") { "${it.key}×${it.value}" }
+            note = if (seen.keys.any { it.lowercase() == "animelib" }) {
+                if (base == null) "Animelib: адрес видео-сервера не получен (в ответе: $list)"
+                else "Animelib: в ответе есть плеер, но без ссылок на видео"
+            } else {
+                "Animelib: сервер не отдал этот плеер (в ответе: ${list.ifEmpty { "пусто" }})"
+            }
+        }
+        val result = native + web
+        if (result.isEmpty()) throw ApiException(0, "Для этой серии нет доступного видео")
+        return VariantsResult(result, note)
     }
 
     // ---- Комментарии ----
