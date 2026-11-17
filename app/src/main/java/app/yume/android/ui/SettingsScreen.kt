@@ -9,6 +9,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -171,6 +178,27 @@ fun SettingsScreen() {
             }
         }
 
+        SectionTitle("Акцентный цвет")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val colors = listOf("A87AFF", "E91E63", "2196F3", "009688", "4CAF50", "FF9800", "F44336")
+            FilterChip(
+                selected = Prefs.accent == "dynamic",
+                onClick = { Prefs.selectAccent("dynamic") },
+                label = { Text("Из обоев") },
+            )
+            for (hex in colors) {
+                val selected = Prefs.accent.equals(hex, ignoreCase = true)
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(android.graphics.Color.parseColor("#$hex")))
+                        .border(if (selected) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        .clickable { Prefs.selectAccent(hex) },
+                )
+            }
+        }
+
         SectionTitle("Чтение манги")
         Text("Режим по умолчанию", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,9 +212,9 @@ fun SettingsScreen() {
         }
         Text("Листание страниц", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((key, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно")) {
+            for ((key, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно", "book" to "Как в книге")) {
                 FilterChip(
-                    selected = (if (Prefs.mangaAnim == "fade") "fade" else "slide") == key,
+                    selected = Prefs.mangaAnim == key,
                     onClick = { Prefs.selectMangaAnim(key) },
                     label = { Text(label) },
                 )

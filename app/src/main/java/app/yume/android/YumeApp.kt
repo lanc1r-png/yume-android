@@ -31,9 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.yume.android.data.Chapter
 import app.yume.android.data.Sort
 import app.yume.android.data.Title
+import app.yume.android.ui.AuthorScreen
 import app.yume.android.ui.CatalogScreen
 import app.yume.android.ui.DetailScreen
 import app.yume.android.ui.FavoritesScreen
@@ -47,6 +49,7 @@ sealed class Route {
 
     class Detail(val title: Title) : Route()
     class Reader(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
+    class Author(val authorId: Int, val name: String, val slug: String?) : Route()
 }
 
 object Nav {
@@ -91,7 +94,7 @@ fun YumeApp() {
         "dark" -> true
         else -> isSystemInDarkTheme()
     }
-    YumeTheme(dark = dark) {
+    YumeTheme(dark = dark, accent = Prefs.accent) {
         BackHandler(enabled = Nav.stack.isNotEmpty()) { Nav.pop() }
         Box(Modifier.fillMaxSize()) {
             MainScaffold()
@@ -101,6 +104,7 @@ fun YumeApp() {
                         when (route) {
                             is Route.Detail -> DetailScreen(route.title)
                             is Route.Reader -> ReaderScreen(route, onClose = { Nav.pop() })
+                            is Route.Author -> AuthorScreen(route)
                         }
                     }
                 }
@@ -125,7 +129,7 @@ private fun MainScaffold() {
                                 tab.title,
                                 maxLines = 1,
                                 softWrap = false,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.sp),
                             )
                         },
                     )

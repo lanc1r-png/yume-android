@@ -16,6 +16,7 @@ object Prefs {
     const val KEY_ANIM = "manga.anim"
     const val KEY_TAPZONES = "manga.tapzones"
     const val KEY_AWAKE = "set.keepAwake"
+    const val KEY_ACCENT = "android.accent"
 
     /** Пока работает только манга. */
     val ACTIVE_PLATFORMS = setOf("manga")
@@ -32,8 +33,12 @@ object Prefs {
     var mangaMode by mutableStateOf("auto")
         private set
 
-    /** Листание страниц: «slide» или «fade» («book» из iOS на Android показывается как «slide»). */
+    /** Листание страниц: «slide», «fade» или «book». */
     var mangaAnim by mutableStateOf("slide")
+        private set
+
+    /** «dynamic» (цвета из обоев, Material You) или hex вида «A87AFF». */
+    var accent by mutableStateOf("dynamic")
         private set
 
     var tapZones by mutableStateOf(true)
@@ -49,6 +54,7 @@ object Prefs {
         theme = KV.getString(KEY_THEME, "system") ?: "system"
         mangaMode = KV.getString(KEY_MODE, "auto") ?: "auto"
         mangaAnim = KV.getString(KEY_ANIM, "slide") ?: "slide"
+        accent = KV.getString(KEY_ACCENT, "dynamic") ?: "dynamic"
         tapZones = KV.getBool(KEY_TAPZONES, true)
         keepAwake = KV.getBool(KEY_AWAKE, true)
     }
@@ -72,6 +78,11 @@ object Prefs {
     fun selectMangaAnim(value: String) {
         mangaAnim = value
         KV.putString(KEY_ANIM, value)
+    }
+
+    fun selectAccent(value: String) {
+        accent = value
+        KV.putString(KEY_ACCENT, value)
     }
 
     fun updateTapZones(value: Boolean) {

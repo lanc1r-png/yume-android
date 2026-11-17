@@ -163,7 +163,7 @@ fun DetailScreen(initial: Title) {
         ) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    RemoteImage(t.imageUrl, Modifier.width(120.dp).height(180.dp).clip(RoundedCornerShape(16.dp)))
+                    RemoteImage(t.coverLarge, Modifier.width(120.dp).height(180.dp).clip(RoundedCornerShape(16.dp)))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(t.displayTitle, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         t.name?.takeIf { it != t.displayTitle }?.let {
@@ -228,7 +228,25 @@ fun DetailScreen(initial: Title) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Автор", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (a in au) Pill(a.title)
+                            for (a in au) {
+                                val aid = a.id
+                                if (aid != null) {
+                                    Surface(
+                                        onClick = { Nav.push(Route.Author(aid, a.title, a.slug)) },
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                    ) {
+                                        Text(
+                                            a.title + " ›",
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        )
+                                    }
+                                } else {
+                                    Pill(a.title)
+                                }
+                            }
                         }
                     }
                 }

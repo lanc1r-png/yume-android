@@ -71,8 +71,13 @@ data class Title(
     val displayTitle: String
         get() = rusName?.takeIf { it.isNotEmpty() } ?: name ?: engName ?: "Без названия"
 
+    /** Обложка среднего размера: для карточек и списков. */
     val imageUrl: String?
-        get() = J.normalizeUrl(cover?.thumbnail ?: cover?.md ?: cover?.default)
+        get() = J.normalizeUrl(cover?.md ?: cover?.default ?: cover?.thumbnail)
+
+    /** Самая крупная обложка: для экрана тайтла. */
+    val coverLarge: String?
+        get() = J.normalizeUrl(cover?.default ?: cover?.md ?: cover?.thumbnail)
 
     /** Ключ в хранилище прочитанного: у манги id отрицательный, как в iOS. */
     val readKey: Int get() = -id

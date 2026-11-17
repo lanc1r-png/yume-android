@@ -67,7 +67,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -345,9 +347,9 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
                 )
                 Text("Листание страниц", style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for ((k, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно")) {
+                    for ((k, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно", "book" to "Как в книге")) {
                         FilterChip(
-                            selected = (if (Prefs.mangaAnim == "fade") "fade" else "slide") == k,
+                            selected = Prefs.mangaAnim == k,
                             onClick = { Prefs.selectMangaAnim(k) },
                             label = { Text(label) },
                         )
@@ -410,10 +412,21 @@ private fun PagedReader(
         Box(
             Modifier
                 .fillMaxSize()
+                .zIndex(if (anim == "book" && offset > 0f) 1f else 0f)
                 .graphicsLayer {
                     if (anim == "fade") {
                         translationX = offset * size.width
                         alpha = 1f - offset.absoluteValue.coerceIn(0f, 1f)
+                    } else if (anim == "book") {
+                        // страницы стоят на месте, уходящая «переворачивается» вокруг левого края
+                        translationX = offset * size.width
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        if (offset > 0f) {
+                            scaleX = (1f - offset).coerceIn(0f, 1f)
+                            alpha = 1f - 0.35f * offset.coerceIn(0f, 1f)
+                        } else if (offset < -1f) {
+                            alpha = 0f
+                        }
                     }
                 },
         ) {
@@ -494,7 +507,7 @@ private fun ZoomablePage(page: MangaPage, onZoom: (Boolean) -> Unit, onTap: (Flo
                         translationY = offY
                     },
             ) {
-                MangaPageImage(page, Modifier.fillMaxSize(), ContentScale.Fit, flow = false)
+                MangaPageImage(page, Modifier.fillMaxSize(), ContentScale.Fit, flow = false, sharp = true)
             }
         }
     }
@@ -527,12 +540,21 @@ private fun ScrollReader(
 
 /** Страница манги: перебирает запасные адреса и даёт повторить загрузку нажатием. */
 @Composable
-private fun MangaPageImage(page: MangaPage, modifier: Modifier, contentScale: ContentScale, flow: Boolean) {
+private fun MangaPageImage(
+    page: MangaPage,
+    modifier: Modifier,
+    contentScale: ContentScale,
+    flow: Boolean,
+    sharp: Boolean = false,
+) {
     var idx by remember(page.id) { mutableIntStateOf(0) }
     var attempt by remember(page.id) { mutableIntStateOf(0) }
     val ctx = LocalPlatformContext.current
-    val request = remember(page.urls, idx, attempt) {
-        ImageRequest.Builder(ctx).data(page.urls[idx.coerceAtMost(page.urls.lastIndex)]).build()
+    val request = remember(page.urls, idx, attempt, sharp) {
+        val b = ImageRequest.Builder(ctx).data(page.urls[idx.coerceAtMost(page.urls.lastIndex)])
+        // для зума страница декодируется в большом разрешении, иначе при приближении она «мылится»
+        if (sharp) b.size(2000, 3200)
+        b.build()
     }
     val loadingBox = Modifier.let {
         if (flow && page.ratio > 0f) it.fillMaxWidth().aspectRatio(1f / page.ratio) else it.fillMaxSize()

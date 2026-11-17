@@ -173,6 +173,74 @@ object Api {
         }
     }
 
+    // ---- Все тайтлы автора ----
+
+    @Volatile
+    private var authorKnown: String? = null
+
+    private suspend fun listRun(extra: List<Pair<String, String>>, page: Int): CatalogPage {
+        for (withSite in listOf(true, false)) {
+            val q = ArrayList<Pair<String, String>>()
+            q.add("page" to page.toString())
+            q.add("sort_by" to "rate_avg")
+            q.add("sort_type" to "desc")
+            q.addAll(extra)
+            if (withSite) q.add("site_id[]" to SITE_ID)
+            try {
+                val root = rawRoot("/manga", q)
+                val items = root.optJSONArray("data").objects().mapNotNull { Title.fromJson(it) }
+                val hasNext = root.optJSONObject("meta")?.opt("has_next_page") as? Boolean ?: items.isNotEmpty()
+                return CatalogPage(items, hasNext)
+            } catch (e: ApiException) {
+                if ((e.code == 422 || e.code == 400) && withSite) continue else throw e
+            }
+        }
+        throw ApiException(0, "Не удалось загрузить список")
+    }
+
+    /**
+     * Имя параметра фильтра по автору сайт нигде не описывает, поэтому пробуем варианты
+     * (по id и по slug) и принимаем тот, что реально меняет выдачу.
+     */
+    suspend fun byAuthor(id: Int, slug: String?, page: Int): CatalogPage {
+        authorKnown?.let { known ->
+            val parts = known.split("|")
+            val value = if (parts.size > 1 && parts[1] == "slug") (slug ?: id.toString()) else id.toString()
+            return listRun(listOf(parts[0] to value), page)
+        }
+        val baseline = try {
+            listRun(emptyList(), page).items.map { it.id }
+        } catch (e: ApiException) {
+            emptyList()
+        } catch (e: java.io.IOException) {
+            emptyList()
+        }
+        val names = listOf(
+            "authors[]", "people[]", "author[]", "peoples[]", "persons[]", "authors", "people",
+            "author", "person", "artists[]", "creators[]", "staff[]", "people_id", "author_id",
+        )
+        val values = ArrayList<Pair<String, String>>()
+        values.add("id" to id.toString())
+        if (!slug.isNullOrEmpty()) values.add("slug" to slug)
+        for ((kind, value) in values) {
+            for (name in names) {
+                try {
+                    val r = listRun(listOf(name to value), page)
+                    val ids = r.items.map { it.id }
+                    if (ids.isNotEmpty() && ids != baseline) {
+                        authorKnown = "$name|$kind"
+                        return r
+                    }
+                } catch (e: ApiException) {
+                    // пробуем следующий вариант
+                } catch (e: java.io.IOException) {
+                    // пробуем следующий вариант
+                }
+            }
+        }
+        throw ApiException(404, "Фильтр по автору не сработал")
+    }
+
     // ---- Тайтл и главы ----
 
     suspend fun details(slug: String): Title {
