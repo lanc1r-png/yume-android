@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,6 +41,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -99,6 +103,7 @@ import app.yume.android.data.Api
 import app.yume.android.data.Block
 import app.yume.android.data.Chapter
 import app.yume.android.data.DownloadManager
+import app.yume.android.data.FavoritesStore
 import app.yume.android.data.HistoryStore
 import app.yume.android.data.KV
 import app.yume.android.data.OfflineStore
@@ -257,13 +262,16 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var fontSize by remember { mutableFloatStateOf(KV.getFloat("reader.font", 18f)) }
     var theme by remember { mutableStateOf(KV.getString("reader.theme", "dark") ?: "dark") }
-    var serif by remember { mutableStateOf(KV.getBool("reader.serif", true)) }
+    var serif by remember { mutableStateOf(KV.getBool("reader.serif", false)) }
     var lineGap by remember { mutableFloatStateOf(KV.getFloat("reader.lh", 0.4f)) }
     var chromeHidden by remember { mutableStateOf(Prefs.novelMode == "pages") }
     var showSettings by remember { mutableStateOf(false) }
     var pages by remember { mutableStateOf<List<NovelPage>>(emptyList()) }
     var paginating by remember { mutableStateOf(false) }
+    var pagesFor by remember { mutableIntStateOf(-1) }
+    var showChapters by remember { mutableStateOf(false) }
 
+    val pagerState = rememberPagerState(pageCount = { pages.size + 1 })
     val colors = colorsFor(theme, systemDark)
     val mode = Prefs.novelMode
     val anim = Prefs.novelAnim
@@ -275,6 +283,8 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
         error = null
         blocks = emptyList()
         pages = emptyList()
+        pagesFor = -1
+        pagerState.scrollToPage(0)
         ReadStore.mark(title.readKey, ch.id)
         HistoryStore.recordChapter(title, ch.id, ch.title)
         val local = OfflineStore.blocks(title.id, ch.id)
@@ -323,8 +333,6 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
         }
     }
 
-    val pagerState = rememberPagerState(pageCount = { pages.size + 1 })
-
     fun turn(delta: Int) {
         val n = pagerState.currentPage + delta
         if (n < 0 || n > pages.size) return
@@ -369,12 +377,14 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                     }
                     paginating = true
                     val t = chapters.getOrNull(index)?.title ?: ""
-                    val oldCount = pages.size
-                    val oldIndex = pagerState.currentPage
+                    val sameChapter = pagesFor == index
+                    val oldCount = if (sameChapter) pages.size else 0
+                    val oldIndex = if (sameChapter) pagerState.currentPage else 0
                     val result = withContext(Dispatchers.Default) {
                         paginate(blocks, t, widthPx, heightPx, fontPx, serif, lineGap, fgInt)
                     }
                     pages = result
+                    pagesFor = index
                     val target = if (oldCount > 0) (oldIndex.toFloat() / oldCount * result.size).toInt() else 0
                     paginating = false
                     pagerState.scrollToPage(target.coerceIn(0, result.size))
@@ -472,17 +482,23 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.statusBarsPadding().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Закрыть") }
-                    Text(
-                        title.displayTitle,
-                        Modifier.weight(1f),
-                        maxLines = 1,
-                        style = MaterialTheme.typography.titleSmall,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "Настройки чтения") }
+                    Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                        Text(
+                            title.displayTitle,
+                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            chapters.getOrNull(index)?.let { "Том ${it.volume} Глава ${it.number}" } ?: "",
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -494,15 +510,43 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
             exit = fadeOut(),
         ) {
             Surface(
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                modifier = Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
-                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-                    Text("${index + 1} из ${chapters.size}", style = MaterialTheme.typography.labelLarge)
-                    IconButton(onClick = { index++ }, enabled = index < chapters.size - 1) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Вперёд") }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                ) {
+                    IconButton(onClick = { index-- }, enabled = index > 0) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Предыдущая глава") }
+                    IconButton(onClick = { showChapters = true }) { Icon(Icons.AutoMirrored.Filled.List, "Список глав") }
+                    val fav = FavoritesStore.contains(title)
+                    IconButton(onClick = { FavoritesStore.toggle(title) }) {
+                        Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "В избранное")
+                    }
+                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "Настройки чтения") }
+                    IconButton(onClick = { index++ }, enabled = index < chapters.size - 1) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Следующая глава") }
+                }
+            }
+        }
+    }
+
+    if (showChapters) {
+        ModalBottomSheet(onDismissRequest = { showChapters = false }) {
+            LazyColumn(Modifier.padding(horizontal = 8.dp)) {
+                items(chapters.size) { i ->
+                    val c = chapters[i]
+                    TextButton(onClick = { index = i; showChapters = false }, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Том ${c.volume} Глава ${c.number}" + if (c.name.isNotEmpty()) " · ${c.name}" else "",
+                            Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            fontWeight = if (i == index) FontWeight.Bold else FontWeight.Normal,
+                            color = if (ReadStore.isRead(title.readKey, c.id) && i != index) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
@@ -594,11 +638,11 @@ private fun ScrollBody(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { onTap() } },
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 72.dp, bottom = 120.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 88.dp, bottom = 130.dp),
         verticalArrangement = Arrangement.spacedBy((fontSize * (0.5f + lineGap)).dp),
     ) {
         item {
-            Text(title, color = colors.fg, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (fontSize + 6).sp)
+            Text(title, color = colors.fg, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (fontSize + 8).sp, lineHeight = (fontSize + 16).sp)
         }
         if (!loading && blocks.isNotEmpty()) {
             item { Text("≈ $minutes мин чтения", color = colors.fg.copy(alpha = 0.55f), style = MaterialTheme.typography.labelMedium) }
@@ -636,7 +680,7 @@ private fun ScrollBody(
                     model = b.url,
                     contentDescription = null,
                     contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
                 )
                 is Block.Rule -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(colors.fg.copy(alpha = 0.2f)).padding(0.5.dp))
             }
