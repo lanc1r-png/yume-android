@@ -127,7 +127,7 @@ private fun SettingsScreen(prefs: Prefs) {
                     modifier = Modifier
                         .weight(1f)
                         .alpha(if (enabled) 1f else 0.55f)
-                        .clickable(enabled = enabled) { prefs.setPlatform(t.key) },
+                        .clickable(enabled = enabled) { prefs.selectPlatform(t.key) },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -173,7 +173,7 @@ private fun SettingsScreen(prefs: Prefs) {
             for ((key, label) in themes) {
                 FilterChip(
                     selected = prefs.theme == key,
-                    onClick = { prefs.setTheme(key) },
+                    onClick = { prefs.selectTheme(key) },
                     label = { Text(label) },
                 )
             }

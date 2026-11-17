@@ -25,13 +25,13 @@ class Prefs(context: Context) {
         return if (saved in ACTIVE_PLATFORMS) saved else "manga"
     }
 
-    fun setPlatform(value: String) {
+    fun selectPlatform(value: String) {
         if (value !in ACTIVE_PLATFORMS) return
         platform = value
         sp.edit().putString(KEY_PLATFORM, value).apply()
     }
 
-    fun setTheme(value: String) {
+    fun selectTheme(value: String) {
         theme = value
         sp.edit().putString(KEY_THEME, value).apply()
     }
