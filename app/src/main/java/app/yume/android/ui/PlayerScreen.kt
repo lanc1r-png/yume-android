@@ -113,6 +113,7 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+    var playInfo by remember { mutableStateOf<String?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var voiceMenu by remember { mutableStateOf(false) }
@@ -144,10 +145,22 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
     }
 
     var pickRef: (PlayableVariant) -> Unit = {}
+    var advanceRef: (ExoPlayer, String) -> Unit = { _, _ -> }
+
+    fun hostOf(u: String): String = try { Uri.parse(u).host ?: u.take(30) } catch (e: Exception) { u.take(30) }
 
     fun startAV(url: String, headers: Map<String, String>) {
         player?.release()
         val p = buildPlayer(ctx, headers)
+        val tag = "${attemptIndex + 1}/${attempts.size.coerceAtLeast(1)} · ${hostOf(url)}"
+        playInfo = "Загрузка… $tag"
+        // Если за 15 секунд плеер так и не начал играть, пробуем следующий вариант.
+        scope.launch {
+            delay(15000)
+            if (player === p && p.playbackState != Player.STATE_READY && p.playbackState != Player.STATE_ENDED) {
+                advanceRef(p, "нет ответа 15 с ($tag)")
+            }
+        }
         val item = MediaItem.Builder().setUri(url).apply {
             subtitle?.let { sub ->
                 val mime = if (sub.lowercase().substringBefore("?").endsWith(".srt")) MimeTypes.APPLICATION_SUBRIP else MimeTypes.TEXT_VTT
@@ -159,28 +172,13 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
         p.setMediaItem(item, (startAt * 1000).toLong())
         p.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                if (player !== p) return
-                if (attemptIndex + 1 < attempts.size) {
-                    attemptIndex++
-                    val (u, h) = attempts[attemptIndex]
-                    startAt = p.currentPosition / 1000.0
-                    startAV(u, h)
-                } else {
-                    // пробуем качество пониже
-                    val cq = currentQuality
-                    val lower = qualities.filter { cq != null && qualityNumber(it.title) < qualityNumber(cq.title) }
-                        .maxByOrNull { qualityNumber(it.title) }
-                    if (lower != null) {
-                        startAt = p.currentPosition / 1000.0
-                        pickRef(lower)
-                    } else {
-                        playbackError = "Видео не открылось: ${error.errorCodeName}"
-                    }
-                }
+                val code = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
+                advanceRef(p, error.errorCodeName + (if (code != null) " HTTP $code" else ""))
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) playbackError = null
+                if (state == Player.STATE_READY) { playbackError = null; playInfo = null }
+                if (state == Player.STATE_BUFFERING && player === p) playInfo = "Буферизация… $tag"
                 if (state == Player.STATE_ENDED && player === p) {
                     val ep = episode
                     val dur = p.duration
@@ -192,6 +190,29 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
         p.prepare()
         p.playWhenReady = true
         player = p
+    }
+
+    advanceRef = { p, detail ->
+        if (player === p) {
+            if (attemptIndex + 1 < attempts.size) {
+                attemptIndex++
+                val (u, h) = attempts[attemptIndex]
+                startAt = p.currentPosition / 1000.0
+                startAV(u, h)
+            } else {
+                // пробуем качество пониже
+                val cq = currentQuality
+                val lower = qualities.filter { cq != null && qualityNumber(it.title) < qualityNumber(cq.title) }
+                    .maxByOrNull { qualityNumber(it.title) }
+                if (lower != null) {
+                    startAt = p.currentPosition / 1000.0
+                    pickRef(lower)
+                } else {
+                    playInfo = null
+                    playbackError = "Видео не открылось: $detail"
+                }
+            }
+        }
     }
 
     fun playNative(q: PlayableVariant) {
@@ -393,6 +414,9 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
             }
             playbackError?.let {
                 Text(it, Modifier.align(Alignment.Center).padding(16.dp), color = Color(0xFFFFA726))
+            }
+            if (playbackError == null) playInfo?.let {
+                Text(it, Modifier.align(Alignment.BottomStart).padding(8.dp), color = Color(0xCCFFFFFF), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
