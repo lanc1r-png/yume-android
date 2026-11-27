@@ -306,8 +306,23 @@ fun LoginScreen(onClose: () -> Unit) {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.userAgentString = app.yume.android.data.Kodik.UA
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
                     setBackgroundColor(android.graphics.Color.BLACK)
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        // Ссылки на приложение ВК (vk://, intent://) в этом окне не открываем:
+                        // сессия из приложения сюда не вернётся, поэтому остаёмся на веб-форме входа.
+                        override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                            val url = request.url.toString()
+                            val scheme = request.url.scheme.orEmpty()
+                            if (scheme == "http" || scheme == "https") return false
+                            if (scheme == "intent") {
+                                val fallback = Regex("S\\.browser_fallback_url=([^;]+)").find(url)?.groupValues?.get(1)
+                                if (fallback != null) view.loadUrl(java.net.URLDecoder.decode(fallback, "UTF-8"))
+                            }
+                            return true
+                        }
+                    }
                     loadUrl("https://animelib.org/ru/")
                     web = this
                 }
