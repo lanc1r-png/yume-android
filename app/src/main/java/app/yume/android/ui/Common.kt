@@ -97,7 +97,7 @@ fun Badge(text: String, modifier: Modifier = Modifier, star: Boolean = false) {
 
 @Composable
 fun PosterCard(t: Title, onClick: () -> Unit, width: Dp = 124.dp) {
-    Column(Modifier.width(width).clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.width(width).bounceClick(onClick), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.width(width).height(width * 1.5f).clip(RoundedCornerShape(14.dp))) {
             RemoteImage(t.imageUrl, Modifier.fillMaxSize())
             t.type?.title?.takeIf { it.isNotEmpty() }?.let {
@@ -117,8 +117,8 @@ fun PosterCard(t: Title, onClick: () -> Unit, width: Dp = 124.dp) {
 
 @Composable
 fun GridCard(t: Title, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(14.dp))) {
+    Column(modifier.bounceClick(onClick), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(18.dp))) {
             RemoteImage(t.imageUrl, Modifier.fillMaxSize())
             t.rateAvg?.let { Badge(it, Modifier.align(Alignment.BottomStart).padding(6.dp), star = true) }
         }

@@ -115,6 +115,15 @@ fun YumeApp() {
             MainScaffold()
             for (route in Nav.stack.toList()) {
                 key(route.uid) {
+                    val visible = androidx.compose.runtime.remember {
+                        androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visibleState = visible,
+                        enter = androidx.compose.animation.slideInHorizontally(
+                            androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+                        ) { it / 4 } + androidx.compose.animation.fadeIn(),
+                    ) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         when (route) {
                             is Route.Detail -> DetailScreen(route.title)
@@ -132,6 +141,7 @@ fun YumeApp() {
                             is Route.Author -> AuthorScreen(route)
                         }
                     }
+                    }
                 }
             }
         }
@@ -145,12 +155,18 @@ private fun MainScaffold() {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             Box(Modifier.fillMaxSize().padding(bottom = FloatingBarHeight + gap + 4.dp)) {
-                when (tabs[Router.tab]) {
-                    YumeTab.Home -> HomeScreen()
-                    YumeTab.Catalog -> CatalogScreen()
-                    YumeTab.Favorites -> FavoritesScreen()
-                    YumeTab.Profile -> ProfileScreen()
-                    YumeTab.Settings -> SettingsScreen()
+                androidx.compose.animation.Crossfade(
+                    targetState = Router.tab,
+                    animationSpec = androidx.compose.animation.core.tween(180),
+                    label = "tabs",
+                ) { index ->
+                    when (tabs[index]) {
+                        YumeTab.Home -> HomeScreen()
+                        YumeTab.Catalog -> CatalogScreen()
+                        YumeTab.Favorites -> FavoritesScreen()
+                        YumeTab.Profile -> ProfileScreen()
+                        YumeTab.Settings -> SettingsScreen()
+                    }
                 }
             }
             FloatingTabBar(
