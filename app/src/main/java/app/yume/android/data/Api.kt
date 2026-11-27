@@ -584,11 +584,39 @@ object Api {
 
     data class CommentsPage(val items: List<CommentItem>, val hasNext: Boolean?)
 
+    /** Какой тип поста сайт принял для комментариев (запоминаем, чтобы не перебирать каждый раз). */
+    private val commentTypeOk = HashMap<String, String>()
+
+    fun commentTypes(postType: String): List<String> {
+        val guess = when (postType) {
+            "episode" -> listOf("episode", "episodes", "anime_episode", "animeEpisode", "anime-episode", "video", "chapter")
+            "chapter" -> listOf("chapter", "chapters", "manga_chapter", "ranobe_chapter", "book_chapter")
+            else -> listOf(postType)
+        }
+        return (listOfNotNull(commentTypeOk[postType]) + guess).distinct()
+    }
+
+    fun commentTypeWorked(postType: String, used: String) {
+        commentTypeOk[postType] = used
+    }
+
     suspend fun comments(postId: Int, postType: String, page: Int): CommentsPage {
-        val text = raw(
-            "/comments",
-            listOf("post_id" to postId.toString(), "post_type" to postType, "page" to page.toString()),
-        )
+        var text: String? = null
+        var last: ApiException? = null
+        for (t in commentTypes(postType)) {
+            try {
+                text = raw(
+                    "/comments",
+                    listOf("post_id" to postId.toString(), "post_type" to t, "page" to page.toString()),
+                )
+                commentTypeWorked(postType, t)
+                break
+            } catch (e: ApiException) {
+                last = e
+                if (e.code != 422 && e.code != 400) throw e
+            }
+        }
+        if (text == null) throw last ?: ApiException(0, "Комментарии недоступны")
         val root = J.parse(text)
         val list = CommentParser.parse(root)
         val meta = (root as? JSONObject)?.optJSONObject("meta")
@@ -600,7 +628,7 @@ object Api {
             try {
                 val text = raw(
                     "/comments",
-                    listOf("post_id" to postId.toString(), "post_type" to postType, key to parentId.toString()),
+                    listOf("post_id" to postId.toString(), "post_type" to (commentTypeOk[postType] ?: postType), key to parentId.toString()),
                 )
                 val list = CommentParser.parse(J.parse(text)).filter { it.id != parentId }
                 if (list.isNotEmpty()) return list
