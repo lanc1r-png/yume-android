@@ -1,23 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Буква Y -->
+    <!-- мягкое свечение за луной -->
+    <path android:pathData="M58,50m-34,0a34,34 0 1,1 68,0a34,34 0 1,1 -68,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="58"
+                android:centerY="50"
+                android:gradientRadius="34"
+                android:type="radial">
+                <item android:color="#55FFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- полумесяц -->
+    <path android:pathData="M54.3,30.1A24,24 0 1,0 74.6,62.0A19,19 0 1,1 54.3,30.1Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="30"
+                android:startY="30"
+                android:endX="72"
+                android:endY="80"
+                android:type="linear">
+                <item android:color="#FFFFFFFF" android:offset="0.0" />
+                <item android:color="#FFE3D4FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- искра -->
     <path
-        android:pathData="M37,35 L54,57 L71,35"
-        android:strokeWidth="7"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M67,31C67.8,37.5 69,38.8 76,39.8C69,40.8 67.8,42.1 67,48.6C66.2,42.1 65,40.8 58,39.8C65,38.8 66.2,37.5 67,31Z" />
     <path
-        android:pathData="M54,57 L54,77"
-        android:strokeWidth="7"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round" />
-    <!-- Звёздочка сна -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M74,24 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M76,52.5m-1.6,0a1.6,1.6 0 1,1 3.2,0a1.6,1.6 0 1,1 -3.2,0" />
 </vector>
