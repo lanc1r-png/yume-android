@@ -3,6 +3,8 @@
 package app.yume.android.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -26,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -232,11 +235,12 @@ fun CatalogScreen() {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(110.dp),
         state = gridState,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 96.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
@@ -254,31 +258,6 @@ fun CatalogScreen() {
                     }
                     val n = CatalogModel.activeCount
                     OutlinedButton(onClick = { showFilters = true }) { Text(if (n > 0) "Фильтры ($n)" else "Фильтры") }
-                }
-                SearchField(
-                    CatalogModel.query,
-                    onChange = { CatalogModel.query = it },
-                    onSubmit = {
-                        SearchHistory.add(CatalogModel.query)
-                        scope.launch { CatalogModel.reload() }
-                    },
-                )
-                if (CatalogModel.query.isEmpty() && SearchHistory.items.isNotEmpty()) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(SearchHistory.items.toList()) { q ->
-                            FilterChip(
-                                selected = false,
-                                onClick = {
-                                    CatalogModel.query = q
-                                    scope.launch { CatalogModel.reload() }
-                                },
-                                label = { Text(q) },
-                            )
-                        }
-                        item {
-                            TextButton(onClick = { SearchHistory.clear() }) { Text("Очистить") }
-                        }
-                    }
                 }
             }
         }
@@ -305,7 +284,51 @@ fun CatalogScreen() {
         }
     }
 
+    BottomSearch(
+        Modifier.align(Alignment.BottomCenter),
+        onSubmit = {
+            SearchHistory.add(CatalogModel.query)
+            scope.launch { CatalogModel.reload() }
+        },
+        onPickHistory = { q ->
+            CatalogModel.query = q
+            scope.launch { CatalogModel.reload() }
+        },
+    )
+    }
+
     if (showFilters) FilterSheet(onDismiss = { showFilters = false })
+}
+
+/** Плавающий поиск внизу экрана: поднимается над клавиатурой, над ним — недавние запросы. */
+@Composable
+private fun BottomSearch(modifier: Modifier, onSubmit: () -> Unit, onPickHistory: (String) -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val imeBottom = with(density) { androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density).toDp() }
+    val navBottom = with(density) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density).toDp() }
+    // Нижняя панель вкладок остаётся под клавиатурой, поэтому поднимаем только на разницу.
+    val lift = (imeBottom - (FloatingBarHeight + 16.dp + navBottom)).coerceAtLeast(0.dp)
+    Column(
+        modifier.padding(start = 14.dp, end = 14.dp, bottom = 8.dp + lift),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (CatalogModel.query.isEmpty() && SearchHistory.items.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(SearchHistory.items.toList()) { q ->
+                    FilterChip(selected = false, onClick = { onPickHistory(q) }, label = { Text(q) })
+                }
+                item { TextButton(onClick = { SearchHistory.clear() }) { Text("Очистить") } }
+            }
+        }
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 8.dp,
+            tonalElevation = 3.dp,
+        ) {
+            SearchField(CatalogModel.query, onChange = { CatalogModel.query = it }, onSubmit = onSubmit)
+        }
+    }
 }
 
 @Composable
