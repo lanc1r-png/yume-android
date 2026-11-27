@@ -337,6 +337,42 @@ object Api {
 
     // ---- Тайтл ----
 
+    private fun titlesIn(root: Any?, out: LinkedHashMap<Int, Title> = LinkedHashMap(), depth: Int = 0): List<Title> {
+        if (depth > 5) return out.values.toList()
+        when (root) {
+            is JSONObject -> {
+                if (root.has("id") && (root.has("slug_url") || root.has("rus_name") || root.has("name"))) {
+                    Title.fromJson(root)?.let { if (it.slugUrl != null) out.putIfAbsent(it.id, it) }
+                }
+                val it = root.keys()
+                while (it.hasNext()) titlesIn(root.opt(it.next()), out, depth + 1)
+            }
+            is JSONArray -> for (i in 0 until root.length()) titlesIn(root.opt(i), out, depth + 1)
+        }
+        return out.values.toList()
+    }
+
+    class Similar(val similar: List<Title>, val related: List<Title>, val note: String)
+
+    /** Похожие и связанные тайтлы. */
+    suspend fun similarTitles(slug: String): Similar {
+        val base = Site.current.apiPath + "/" + slug
+        val notes = ArrayList<String>()
+        val lists = ArrayList<List<Title>>()
+        for (sub in listOf("similar", "relations")) {
+            try {
+                val root = J.parse(raw("$base/$sub"))
+                lists.add(titlesIn(root).filter { it.slugUrl != slug })
+            } catch (e: Exception) {
+                lists.add(emptyList())
+                notes.add("$sub: ${e.message}")
+            }
+        }
+        val sim = lists[0]
+        val simIds = sim.map { it.id }.toSet()
+        return Similar(sim, lists[1].filter { it.id !in simIds }, notes.joinToString("; "))
+    }
+
     /** Число серий или глав и дата последнего выхода (поля ищем по смыслу имени). */
     suspend fun updateInfo(slug: String?): Pair<Int?, Long?> {
         if (slug.isNullOrEmpty()) return null to null
