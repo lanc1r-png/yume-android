@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -179,7 +178,7 @@ fun FavoritesScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Избранное", Modifier.weight(1f), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
                     IconButton(onClick = { Nav.push(Route.NewInFavorites()) }) {
-                        Icon(if (hasNew) Icons.Filled.NotificationsActive else Icons.Filled.Notifications, "Новое", tint = if (hasNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Filled.Notifications, "Новое", tint = if (hasNew) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Box {
                         IconButton(onClick = { sortMenu = true }) { Icon(Icons.Filled.MoreVert, "Сортировка") }
