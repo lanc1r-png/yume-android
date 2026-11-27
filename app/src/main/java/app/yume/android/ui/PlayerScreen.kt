@@ -91,6 +91,14 @@ private fun buildPlayer(ctx: android.content.Context, headers: Map<String, Strin
         .setDefaultRequestProperties(headers.filterKeys { it != "User-Agent" })
     return ExoPlayer.Builder(ctx)
         .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(http))
+        .setAudioAttributes(
+            androidx.media3.common.AudioAttributes.Builder()
+                .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            true,
+        )
+        .setHandleAudioBecomingNoisy(true)
         .build()
 }
 
@@ -219,8 +227,6 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
         val sets = ArrayList<Map<String, String>>()
         sets.add(Api.playbackHeaders)
         sets.add(mapOf("Referer" to "https://animelib.org/", "Origin" to "https://animelib.org"))
-        // Если вошли в аккаунт, сервер видео может ждать токен.
-        Api.token?.let { sets.add(Api.playbackHeaders + ("Authorization" to "Bearer $it")) }
         sets.add(emptyMap())
         val list = ArrayList<Pair<String, Map<String, String>>>()
         for (u in listOf(q.url) + q.alts) for (h in sets) list.add(u to h)
@@ -546,6 +552,7 @@ private fun KodikWeb(url: String, onStream: (String) -> Unit, onFullscreen: () -
                     settings.mediaPlaybackRequiresUserGesture = false
                     settings.userAgentString = Kodik.UA
                     settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.allowFileAccess = false
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     webViewClient = object : WebViewClient() {

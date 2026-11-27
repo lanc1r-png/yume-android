@@ -180,7 +180,7 @@ object Api {
         try {
             client.newCall(rb.build()).execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
-                RequestLog.add(method, reqUrl, resp.code, System.currentTimeMillis() - started, if (resp.isSuccessful) "" else body.take(160).replace("\n", " "))
+                RequestLog.add(method, reqUrl, resp.code, System.currentTimeMillis() - started, if (resp.isSuccessful) "" else body.take(60).replace("\n", " "))
                 if (!resp.isSuccessful) throw ApiException(resp.code, body.take(300))
                 body
             }

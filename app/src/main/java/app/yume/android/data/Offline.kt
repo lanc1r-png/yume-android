@@ -251,7 +251,7 @@ object OfflineStore {
     /** Удаляет самые старые уже прочитанные главы, пока не уложимся в лимит. Возвращает, получилось ли. */
     fun purgeRead(limitBytes: Long): Boolean {
         for (e in entries.values.sortedBy { it.updated }) {
-            val read = ReadStore.read[(if (Site.current.isManga) -e.novel.id else e.novel.id).toString()].orEmpty().toSet()
+            val read = ReadStore.read[e.novel.id.toString()].orEmpty().toSet()
             for (cid in e.files.keys.toList()) {
                 if (totalBytes() <= limitBytes) return true
                 if (cid in read) remove(e.novel.id, cid)
@@ -375,7 +375,7 @@ object DownloadManager {
 
     private fun metered(): Boolean {
         val cm = appContext?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-        return cm.isActiveNetworkMetered
+        return try { cm.isActiveNetworkMetered } catch (_: Exception) { false }
     }
 
     private const val CHANNEL = "downloads"

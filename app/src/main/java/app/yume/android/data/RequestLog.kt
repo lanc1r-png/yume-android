@@ -13,8 +13,12 @@ object RequestLog {
 
     fun add(method: String, url: String, code: Int, ms: Long, note: String = "") {
         val clean = url.replace(Regex("(?i)(token|access_token)=[^&]+"), "$1=***")
-        items.add(0, Item(System.currentTimeMillis(), method, clean, code, ms, note))
-        while (items.size > 300) items.removeAt(items.size - 1)
+        val item = Item(System.currentTimeMillis(), method, clean, code, ms, note)
+        // Запросы идут из разных потоков, а список читает интерфейс: пишем только с главного.
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            items.add(0, item)
+            while (items.size > 300) items.removeAt(items.size - 1)
+        }
     }
 
     fun text(): String {

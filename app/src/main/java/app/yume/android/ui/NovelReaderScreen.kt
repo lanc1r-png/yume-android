@@ -318,7 +318,7 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
         ReadStore.mark(title.readKey, ch.id)
         app.yume.android.data.SiteSync.view(title.id, ch.id)
         HistoryStore.recordChapter(title, ch.id, ch.title)
-        val local = OfflineStore.blocks(title.id, ch.id)
+        val local = withContext(Dispatchers.IO) { OfflineStore.blocks(title.id, ch.id) }
         if (local != null) {
             blocks = local
             loading = false
