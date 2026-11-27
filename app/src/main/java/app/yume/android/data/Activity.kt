@@ -49,6 +49,7 @@ object ActivityStore {
 
     fun days(): Map<String, Day> {
         @Suppress("UNUSED_VARIABLE") val v = version
+        if (daysVersion == version) daysCache?.let { return it }
         val root = load()
         val out = HashMap<String, Day>()
         val it = root.keys()
@@ -57,8 +58,13 @@ object ActivityStore {
             val d = root.optJSONObject(k) ?: continue
             out[k] = Day(d.optInt("episodes"), d.optInt("manga"), d.optInt("novels"))
         }
+        daysCache = out
+        daysVersion = version
         return out
     }
+
+    private var daysCache: Map<String, Day>? = null
+    private var daysVersion = -1
 }
 
 /** Жанры из /user/{id}/stats: ищем в ответе список «название — число». */

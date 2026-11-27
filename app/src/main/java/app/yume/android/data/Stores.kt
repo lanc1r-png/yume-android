@@ -273,8 +273,18 @@ object ProgressStore {
         val old = map[k]
         val new = WatchProgress(position, duration, HistoryItem.now())
         map[k] = new
-        save()
+        // Не пишем весь словарь каждые 5 секунд: раз в 20 секунд и при сворачивании (flush).
+        val now = System.currentTimeMillis()
+        if (old == null || old.finished != new.finished || now - lastSave >= 20_000) save() else dirty = true
         if (old == null || old.finished != new.finished || Math.abs(old.position - position) >= 30) version++
+    }
+
+    private var lastSave = 0L
+    private var dirty = false
+
+    /** Дописывает отложенное сохранение (вызывается при сворачивании приложения). */
+    fun flush() {
+        if (dirty) save()
     }
 
     fun clear() {
@@ -284,6 +294,8 @@ object ProgressStore {
     }
 
     private fun save() {
+        lastSave = System.currentTimeMillis()
+        dirty = false
         val o = JSONObject()
         for ((k, v) in map) {
             o.put(k, JSONObject().put("position", v.position).put("duration", v.duration).put("updated", v.updated))
@@ -325,7 +337,16 @@ object ReadStore {
         }
     }
 
-    fun isRead(titleKey: Int, chapterId: Int): Boolean = read[titleKey.toString()]?.contains(chapterId) == true
+    // Множества для быстрой проверки; пересобираются, только когда список глав заменили.
+    private val setCache = HashMap<String, Pair<List<Int>, Set<Int>>>()
+
+    fun isRead(titleKey: Int, chapterId: Int): Boolean {
+        val k = titleKey.toString()
+        val list = read[k] ?: return false
+        val cached = setCache[k]
+        val set = if (cached != null && cached.first === list) cached.second else list.toHashSet().also { setCache[k] = list to it }
+        return chapterId in set
+    }
 
     fun lastChapter(titleKey: Int): Int? = last[titleKey.toString()]
 
