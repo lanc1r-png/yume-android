@@ -378,9 +378,40 @@ object DownloadManager {
         return cm.isActiveNetworkMetered
     }
 
+    private const val CHANNEL = "downloads"
+    private const val NOTE_ID = 7001
+    private var total = 0
+    private var done = 0
+
+    private fun notify(text: String, progress: Boolean, finished: Boolean = false) {
+        val c = appContext ?: return
+        try {
+            val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (android.os.Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
+                nm.createNotificationChannel(android.app.NotificationChannel(CHANNEL, "Загрузки", android.app.NotificationManager.IMPORTANCE_LOW))
+            }
+            val n = androidx.core.app.NotificationCompat.Builder(c, CHANNEL)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle("Yume: загрузка глав")
+                .setContentText(text)
+                .setOnlyAlertOnce(true)
+                .setOngoing(progress)
+                .setAutoCancel(finished)
+                .apply { if (progress && total > 0) setProgress(total, done, false) }
+                .build()
+            nm.notify(NOTE_ID, n)
+        } catch (e: Exception) {
+            // нет разрешения на уведомления — загрузка идёт и без них
+        }
+    }
+
     private suspend fun run() {
+        total = synchronized(jobs) { jobs.size }
+        done = 0
         while (true) {
             val job = synchronized(jobs) { if (jobs.isEmpty()) null else jobs.removeAt(0) } ?: break
+            total = maxOf(total, done + synchronized(jobs) { jobs.size } + 1)
+            notify("${done + 1} из $total: ${job.chapter.title}", true)
             current = job.chapter.id
             if (Prefs.offWifi) {
                 while (metered()) {
@@ -404,10 +435,13 @@ object DownloadManager {
                 failed[job.chapter.id] = e.message ?: "Ошибка загрузки"
             }
             pending.remove(job.chapter.id)
+            done++
             delay(350)
         }
         current = null
         status = ""
+        val bad = failed.size
+        notify(if (bad > 0) "Готово: $done, с ошибкой: $bad" else "Готово: загружено глав — $done", false, true)
     }
 
     private suspend fun download(job: Job2) {

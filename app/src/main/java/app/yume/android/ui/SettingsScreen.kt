@@ -281,6 +281,7 @@ fun SettingsScreen() {
                 "Скачано глав: ${OfflineStore.totalChapters()} · ${OfflineStore.sizeText()}",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            OutlinedButton(onClick = { Nav.push(Route.Offline()) }) { Text("Открыть «Скачанное»") }
             Text("Лимит места", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (g in listOf(0, 1, 2, 3, 5, 10, 20, 50)) {

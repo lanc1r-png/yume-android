@@ -64,6 +64,7 @@ import app.yume.android.data.HistoryStore
 import app.yume.android.data.ProgressStore
 import app.yume.android.data.Site
 import app.yume.android.Route
+import app.yume.android.data.DownloadManager
 import app.yume.android.data.Api
 import app.yume.android.data.Chapter
 import app.yume.android.data.FavoritesStore
@@ -356,6 +357,26 @@ fun DetailScreen(initial: Title) {
             item {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (site.isAnime) "Серии" else "Главы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (site.isRanobe && chapters.isNotEmpty()) {
+                        var bulk by remember { mutableStateOf(false) }
+                        val askPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+                        Box {
+                            TextButton(onClick = { bulk = true }) { Text("Скачать ⬇") }
+                            androidx.compose.material3.DropdownMenu(expanded = bulk, onDismissRequest = { bulk = false }) {
+                                val readIds = ReadStore.read[t.readKey.toString()].orEmpty().toSet()
+                                val from = chapters.indexOfFirst { it.id !in readIds }.let { if (it < 0) 0 else it }
+                                fun go(list: List<Chapter>) {
+                                    bulk = false
+                                    if (android.os.Build.VERSION.SDK_INT >= 33) askPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    DownloadManager.enqueue(t, chapters, list)
+                                }
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Следующие 10 непрочитанных") }, onClick = { go(chapters.drop(from).take(10)) })
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Следующие 50 непрочитанных") }, onClick = { go(chapters.drop(from).take(50)) })
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Все непрочитанные") }, onClick = { go(chapters.filter { it.id !in readIds }) })
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Все главы") }, onClick = { go(chapters) })
+                            }
+                        }
+                    }
                     if (chapters.size > 1 || episodes.size > 1) {
                         TextButton(onClick = { reversed = !reversed }) {
                             Text(if (reversed) "Сначала новые" else "Сначала старые")
