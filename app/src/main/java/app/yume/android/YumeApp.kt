@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import app.yume.android.data.Chapter
@@ -189,7 +190,7 @@ private fun MainScaffold() {
                         if (glass) Modifier.hazeChild(
                             state = haze,
                             shape = androidx.compose.foundation.shape.CircleShape,
-                            style = HazeStyle(tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f), blurRadius = 24.dp),
+                            style = HazeStyle(tint = HazeTint(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)), blurRadius = 24.dp),
                         ) else Modifier,
                     ),
             )
