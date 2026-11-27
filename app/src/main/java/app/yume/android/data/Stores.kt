@@ -90,6 +90,29 @@ class TitleList(private val key: String) {
         save()
     }
 
+    /**
+     * Тайтлы из списков на сайте: новые добавляются в конец, а те, что раньше пришли с сайта
+     * и оттуда убраны, убираются и здесь. Добавленное только в приложении не трогаем.
+     */
+    fun mergeFromSite(list: List<Title>, siteKey: String) {
+        val idsKey = "sitelists.ids.$siteKey"
+        val before = try {
+            JSONArray(KV.getString(idsKey, null) ?: "[]").let { a -> (0 until a.length()).map { a.optInt(it) }.toSet() }
+        } catch (e: Exception) {
+            emptySet()
+        }
+        val now = list.map { it.id }.toSet()
+        val out = items.filter { !(it.id in before && it.id !in now) }.toMutableList()
+        val have = out.map { it.id }.toMutableSet()
+        for (a in list) if (have.add(a.id)) out.add(a)
+        if (out.map { it.id } != items.map { it.id }) {
+            items.clear()
+            items.addAll(out)
+            save()
+        }
+        KV.putString(idsKey, JSONArray(now.toList()).toString())
+    }
+
     fun clear() {
         items.clear()
         KV.remove(key)
@@ -114,6 +137,12 @@ object FavoritesStore {
         }
 
     val items get() = current.items
+
+    fun forSite(site: Site): TitleList = when (site) {
+        Site.ANIME -> anime
+        Site.RANOBE -> novels
+        Site.MANGA -> manga
+    }
 
     fun load() {
         anime.load()
@@ -356,6 +385,7 @@ object Stores {
         FavoritesStore.load()
         HistoryStore.load()
         ProgressStore.load()
+        FavMetaStore.load()
         ReadStore.load()
         SearchHistory.load()
     }

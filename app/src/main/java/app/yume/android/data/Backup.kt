@@ -24,6 +24,7 @@ object Backup {
     private val prefixes = listOf(
         "favorites", "history", "progress", "read", "search.", "set.",
         "accent.", "reader.", "manga.", "novel.", "off.",
+        "activity", "bookmarks", "highlights", "favmeta", "fav.", "friends", "profile.",
     )
 
     const val FILE_NAME = "Yume-backup.plist"
@@ -31,11 +32,13 @@ object Backup {
     private const val DATE_KEY = "backup.folder.date"
     private const val FAIL_KEY = "backup.folder.failed"
 
-    fun allowed(key: String): Boolean = prefixes.any { key.startsWith(it) }
+    fun allowed(key: String): Boolean = !key.startsWith("friends.cache") && prefixes.any { key.startsWith(it) }
 
     private fun isData(key: String): Boolean =
         key.startsWith("favorites.") || key.startsWith("history.") || key.startsWith("progress") ||
-            key == "read.v1" || key == "readlast.v1"
+            key == "read.v1" || key == "readlast.v1" || key == "favmeta.v1" ||
+            key.startsWith("activity") || key.startsWith("bookmarks") || key.startsWith("highlights") ||
+            (key.startsWith("friends") && key.endsWith(".v1"))
 
     private fun esc(s: String): String = s
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

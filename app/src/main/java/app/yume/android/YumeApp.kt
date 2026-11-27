@@ -96,6 +96,9 @@ private enum class YumeTab(val title: String, val icon: ImageVector) {
 
 @Composable
 fun YumeApp() {
+    androidx.compose.runtime.LaunchedEffect(app.yume.android.data.AuthStore.user?.id) {
+        if (app.yume.android.data.AuthStore.user != null) app.yume.android.data.SiteListSync.syncAll()
+    }
     val dark = when (Prefs.theme) {
         "light" -> false
         "dark" -> true

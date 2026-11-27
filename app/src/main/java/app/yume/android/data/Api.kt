@@ -132,11 +132,12 @@ object Api {
         query: List<Pair<String, String>> = emptyList(),
         method: String = "GET",
         json: JSONObject? = null,
+        site: Site? = null,
     ): String {
         var attempt = 0
         while (true) {
             try {
-                val body = gate.withPermit { rawOnce(path, query, method, json) }
+                val body = gate.withPermit { rawOnce(path, query, method, json, site) }
                 waitNote = null
                 return body
             } catch (e: ApiException) {
@@ -157,8 +158,9 @@ object Api {
         query: List<Pair<String, String>>,
         method: String,
         json: JSONObject?,
+        siteOverride: Site?,
     ): String = withContext(Dispatchers.IO) {
-        val site = Site.current
+        val site = siteOverride ?: Site.current
         val builder = "$BASE$path".toHttpUrl().newBuilder()
         for ((k, v) in query) builder.addQueryParameter(k, v)
         val rb = Request.Builder()

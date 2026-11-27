@@ -153,6 +153,7 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
         error = null
         pages = emptyList()
         ReadStore.mark(title.readKey, ch.id)
+        app.yume.android.data.SiteSync.view(title.id, ch.id)
         HistoryStore.recordChapter(title, ch.id, ch.title)
         try {
             val result = Api.pages(slug, ch)

@@ -298,6 +298,21 @@ fun DetailScreen(initial: Title) {
                 }
             }
 
+            if (FavoritesStore.contains(t)) {
+                item {
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val cur = app.yume.android.data.FavMetaStore.status(t)
+                        for (st in app.yume.android.data.ListStatus.entries) {
+                            androidx.compose.material3.FilterChip(
+                                selected = cur == st,
+                                onClick = { app.yume.android.data.FavMetaStore.setStatus(t, if (cur == st) null else st) },
+                                label = { Text(st.title(site.isBook)) },
+                            )
+                        }
+                    }
+                }
+            }
             if (AuthStore.token != null) {
                 item {
                     Surface(

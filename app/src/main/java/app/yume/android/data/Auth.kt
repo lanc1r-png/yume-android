@@ -192,6 +192,8 @@ object AuthStore {
     }
 
     /** Тайтл в списке закладок может лежать на разной глубине: выбираем самый похожий объект. */
+    fun titleFromBookmark(d: JSONObject): Title? = titleFrom(d)
+
     private fun titleFrom(d: JSONObject): Title? {
         val candidates = ArrayList<JSONObject>()
         val it = d.keys()
