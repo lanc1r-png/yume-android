@@ -25,6 +25,7 @@ object Prefs {
     const val KEY_OFF_WIFI = "off.wifi"
     const val KEY_OFF_PREFETCH = "off.prefetch"
     const val KEY_HAPTICS = "set.haptics"
+    const val KEY_GLASS = "set.glass"
     const val KEY_MANGA_BG = "manga.autobg"
     const val KEY_AUTO_SPEED = "manga.auto.speed"
     const val KEY_AUTO_NEXT = "manga.auto.next"
@@ -86,6 +87,7 @@ object Prefs {
         private set
 
     var haptics by mutableStateOf(true)
+    var glass by mutableStateOf(false)
         private set
 
     var mangaAutoBg by mutableStateOf(false)
@@ -128,6 +130,7 @@ object Prefs {
         accent = KV.getString(KEY_ACCENT, "dynamic") ?: "dynamic"
         tapZones = KV.getBool(KEY_TAPZONES, true)
         haptics = KV.getBool(KEY_HAPTICS, true)
+        glass = KV.getBool(KEY_GLASS, false)
         mangaAutoBg = KV.getBool(KEY_MANGA_BG, false)
         autoSpeed = KV.getFloat(KEY_AUTO_SPEED, 60f)
         mangaAutoNext = KV.getBool(KEY_AUTO_NEXT, true)
@@ -160,6 +163,7 @@ object Prefs {
     fun updateFWarm(v: Float) { fWarm = v; KV.putFloat(KEY_F_WARM, v) }
     fun updateFGray(v: Boolean) { fGray = v; KV.putBool(KEY_F_GRAY, v) }
     fun updateHaptics(v: Boolean) { haptics = v; KV.putBool(KEY_HAPTICS, v) }
+    fun updateGlass(v: Boolean) { glass = v; KV.putBool(KEY_GLASS, v) }
     fun updateMangaAutoBg(v: Boolean) { mangaAutoBg = v; KV.putBool(KEY_MANGA_BG, v) }
     fun selectOffLimit(v: Int) { offLimit = v; KV.putString(KEY_OFF_LIMIT, v.toString()) }
     fun selectOffOverflow(v: String) { offOverflow = v; KV.putString(KEY_OFF_OVERFLOW, v) }
