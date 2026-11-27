@@ -14,6 +14,7 @@ class YumeApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         KV.init(this)
+        app.yume.android.data.Kodik.init(this)
         Prefs.reload()
         Stores.loadAll()
         app.yume.android.data.AuthStore.init(this)

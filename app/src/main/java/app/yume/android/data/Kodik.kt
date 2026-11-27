@@ -43,6 +43,13 @@ object Kodik {
             client.newCall(req).execute().use { it.body?.string() ?: throw KodikException("не открылась страница плеера") }
         }
 
+    @Volatile
+    private var appContext: android.content.Context? = null
+
+    fun init(context: android.content.Context) {
+        appContext = context.applicationContext
+    }
+
     suspend fun resolve(pageUrl: String): List<Pair<Int, String>> {
         var last: KodikException? = null
         for (ua in listOf(UA_IOS, UA)) {
@@ -52,7 +59,87 @@ object Kodik {
                 last = e
             }
         }
-        throw last ?: KodikException("не получилось")
+        // Запрос «изнутри» настоящей страницы плеера: те же куки, TLS и подписи, что у браузера.
+        try {
+            return resolveViaWebView(pageUrl)
+        } catch (e: KodikException) {
+            throw KodikException((last?.message ?: "") + "; в браузере: " + e.message)
+        }
+    }
+
+    private const val WEB_JS = """
+(function(){
+ function out(s){ yume.done(s); }
+ var tries=0;
+ function go(){
+  try{
+   if(typeof urlParams==='undefined'||typeof videoInfo==='undefined'){
+     if(tries++<40){ setTimeout(go,250); return; }
+     out('ERR|нет urlParams/videoInfo'); return;
+   }
+   var p = (typeof urlParams==='string') ? JSON.parse(urlParams) : urlParams;
+   var path='/ftor';
+   var sc=document.querySelector('script[src*="app.player"]');
+   var pre = sc ? fetch(sc.src).then(function(r){return r.text();}).then(function(js){
+       var m=js.match(/url:\s*atob\(\s*["']([^"']+)["']\s*\)/);
+       if(m){ var d=atob(m[1]); if(d.charAt(0)==='/') path=d; }
+     }).catch(function(){}) : Promise.resolve();
+   pre.then(function(){
+     var b=new URLSearchParams();
+     ['d','d_sign','pd','pd_sign','ref','ref_sign'].forEach(function(k){ b.append(k, p[k]||''); });
+     b.append('bad_user','true'); b.append('cdn_is_working','true');
+     b.append('type',videoInfo.type); b.append('hash',videoInfo.hash); b.append('id',videoInfo.id); b.append('info','{}');
+     return fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:b.toString()});
+   }).then(function(r){ return r.text().then(function(t){ out(r.status+'|'+t); }); })
+   .catch(function(e){ out('ERR|'+e); });
+  }catch(e){ out('ERR|'+e); }
+ }
+ go();
+})();
+"""
+
+    @android.annotation.SuppressLint("SetJavaScriptEnabled")
+    private suspend fun resolveViaWebView(pageUrl: String): List<Pair<Int, String>> {
+        val ctx = appContext ?: throw KodikException("нет контекста")
+        val raw = withContext(Dispatchers.Main) {
+            kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                val wv = android.webkit.WebView(ctx)
+                var finished = false
+                var started = false
+                fun finish(res: Result<String>) {
+                    if (finished) return
+                    finished = true
+                    handler.removeCallbacksAndMessages(null)
+                    wv.stopLoading()
+                    wv.destroy()
+                    if (cont.isActive) cont.resumeWith(res)
+                }
+                wv.settings.javaScriptEnabled = true
+                wv.settings.domStorageEnabled = true
+                wv.settings.userAgentString = UA
+                wv.addJavascriptInterface(object {
+                    @android.webkit.JavascriptInterface
+                    fun done(s: String) {
+                        handler.post { finish(Result.success(s)) }
+                    }
+                }, "yume")
+                wv.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+                        if (started) return
+                        started = true
+                        view.evaluateJavascript(WEB_JS, null)
+                    }
+                }
+                handler.postDelayed({ finish(Result.failure(KodikException("таймаут"))) }, 25000)
+                cont.invokeOnCancellation { handler.post { if (!finished) { finished = true; wv.destroy() } } }
+                wv.loadUrl(pageUrl, mapOf("Referer" to "https://animelib.org/"))
+            }
+        }
+        val code = raw.substringBefore("|")
+        val text = raw.substringAfter("|", "")
+        if (code == "ERR") throw KodikException(text.take(100))
+        return linksFrom("[$code] $text")
     }
 
     private suspend fun resolveOnce(pageUrl: String, ua: String): List<Pair<Int, String>> {
@@ -105,6 +192,11 @@ object Kodik {
                 .build()
             client.newCall(req).execute().use { "[" + it.code + "] " + it.body?.string().orEmpty() }
         }
+        return linksFrom(text)
+    }
+
+    /** Разбирает ответ «[код] json» и расшифровывает ссылки. */
+    private fun linksFrom(text: String): List<Pair<Int, String>> {
         val links = try {
             JSONObject(text.substringAfter("] ")).optJSONObject("links")
         } catch (e: Exception) {
