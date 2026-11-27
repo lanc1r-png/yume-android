@@ -3,6 +3,9 @@
 package app.yume.android.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -304,8 +307,8 @@ fun CatalogScreen() {
 @Composable
 private fun BottomSearch(modifier: Modifier, onSubmit: () -> Unit, onPickHistory: (String) -> Unit) {
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val imeBottom = with(density) { androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density).toDp() }
-    val navBottom = with(density) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density).toDp() }
+    val imeBottom = with(density) { WindowInsets.ime.getBottom(density).toDp() }
+    val navBottom = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
     // Нижняя панель вкладок остаётся под клавиатурой, поэтому поднимаем только на разницу.
     val lift = (imeBottom - (FloatingBarHeight + 16.dp + navBottom)).coerceAtLeast(0.dp)
     Column(
