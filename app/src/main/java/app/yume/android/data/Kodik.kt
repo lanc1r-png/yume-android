@@ -40,7 +40,11 @@ object Kodik {
     private suspend fun fetch(client: okhttp3.OkHttpClient, ua: String, url: String, referer: String): String =
         withContext(Dispatchers.IO) {
             val req = Request.Builder().url(url).header("Referer", referer).header("User-Agent", ua).build()
-            client.newCall(req).execute().use { it.body?.string() ?: throw KodikException("не открылась страница плеера") }
+            val t0 = System.currentTimeMillis()
+            client.newCall(req).execute().use {
+                RequestLog.add("GET", "kodik " + url.substringBefore("?").takeLast(60) + " [" + ua.takeLast(12) + "]", it.code, System.currentTimeMillis() - t0)
+                it.body?.string() ?: throw KodikException("не открылась страница плеера")
+            }
         }
 
     @Volatile
@@ -190,7 +194,11 @@ object Kodik {
                 .header("Referer", pageUrl)
                 .header("User-Agent", ua)
                 .build()
-            client.newCall(req).execute().use { "[" + it.code + "] " + it.body?.string().orEmpty() }
+            val t0 = System.currentTimeMillis()
+            client.newCall(req).execute().use {
+                RequestLog.add("POST", "kodik $host$path [" + ua.takeLast(12) + "]", it.code, System.currentTimeMillis() - t0)
+                "[" + it.code + "] " + it.body?.string().orEmpty()
+            }
         }
         return linksFrom(text)
     }
