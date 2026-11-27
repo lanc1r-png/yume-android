@@ -17,6 +17,7 @@ class YumeApplication : Application(), SingletonImageLoader.Factory {
         Prefs.reload()
         Stores.loadAll()
         app.yume.android.data.AuthStore.init(this)
+        app.yume.android.data.FriendsModel.init()
         app.yume.android.data.OfflineStore.init(this)
         app.yume.android.data.DownloadManager.init(this)
     }

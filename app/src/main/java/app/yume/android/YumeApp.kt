@@ -56,6 +56,8 @@ sealed class Route {
     class Player(val title: Title, val episodes: List<EpisodeShort>, val start: Int) : Route()
     class Novel(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
     class Login : Route()
+    class Friends : Route()
+    class FriendProfile(val friend: app.yume.android.data.Friend) : Route()
     class Author(val authorId: Int, val name: String, val slug: String?) : Route()
 }
 
@@ -115,6 +117,8 @@ fun YumeApp() {
                             is Route.Detail -> DetailScreen(route.title)
                             is Route.Reader -> ReaderScreen(route, onClose = { Nav.pop() })
                             is Route.Player -> PlayerScreen(route, onClose = { Nav.pop() })
+                            is Route.Friends -> app.yume.android.ui.FriendsScreen(onClose = { Nav.pop() })
+                            is Route.FriendProfile -> app.yume.android.ui.FriendProfileScreen(route, onClose = { Nav.pop() })
                             is Route.Login -> app.yume.android.ui.LoginScreen(onClose = { Nav.pop() })
                             is Route.Novel -> NovelReaderScreen(route, onClose = { Nav.pop() })
                             is Route.Author -> AuthorScreen(route)

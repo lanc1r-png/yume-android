@@ -386,6 +386,7 @@ object Stores {
         HistoryStore.load()
         ProgressStore.load()
         FavMetaStore.load()
+        LocalFriends.load()
         ReadStore.load()
         SearchHistory.load()
     }

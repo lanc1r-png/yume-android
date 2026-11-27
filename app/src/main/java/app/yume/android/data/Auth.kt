@@ -131,7 +131,7 @@ object AuthStore {
         }
     }
 
-    private fun deepCover(d: JSONObject, depth: Int): String? {
+    fun deepCover(d: JSONObject, depth: Int): String? {
         val hints = listOf("cover", "background", "banner", "header", "bg")
         val it = d.keys()
         while (it.hasNext()) {
@@ -168,8 +168,8 @@ object AuthStore {
 
     // ---- Закладки сайта ----
 
-    suspend fun folders(): List<BookmarkFolder> {
-        val uid = user?.id ?: return emptyList()
+    suspend fun folders(userId: Int? = null): List<BookmarkFolder> {
+        val uid = userId ?: user?.id ?: return emptyList()
         val root = J.parse(Api.raw("/bookmarks/folder/$uid")) as? JSONObject ?: return emptyList()
         return root.optJSONArray("data").objects().mapNotNull { d ->
             val id = J.int(d.opt("id")) ?: return@mapNotNull null
@@ -181,8 +181,8 @@ object AuthStore {
         }
     }
 
-    suspend fun bookmarks(folder: Int?, page: Int): List<Title> {
-        val uid = user?.id ?: return emptyList()
+    suspend fun bookmarks(folder: Int?, page: Int, userId: Int? = null): List<Title> {
+        val uid = userId ?: user?.id ?: return emptyList()
         val q = ArrayList<Pair<String, String>>()
         q.add("user_id" to uid.toString())
         q.add("page" to page.toString())
