@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        app.yume.android.data.ProgressStore.flush()
         // как в iOS: копия обновляется при сворачивании приложения
         try {
             Backup.writeAuto(applicationContext)

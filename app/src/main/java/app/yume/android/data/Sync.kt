@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -273,9 +274,11 @@ object SiteListSync {
                 }
                 if (st == null) custom.add(SiteFolders.Folder(fid, name, members))
             }
-            FavoritesStore.forSite(site).mergeFromSite(titles, site.key)
-            FavMetaStore.applySiteStatuses(titles.map { it to status[it.id] }, site.key)
-            SiteFolders.set(custom, site.key)
+            withContext(Dispatchers.Main) {
+                FavoritesStore.forSite(site).mergeFromSite(titles, site.key)
+                FavMetaStore.applySiteStatuses(titles.map { it to status[it.id] }, site.key)
+                SiteFolders.set(custom, site.key)
+            }
             lastError.remove(site.key)
             KV.putString(lastKey, now.toString())
         } catch (e: kotlinx.coroutines.CancellationException) {

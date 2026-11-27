@@ -254,12 +254,16 @@ object AuthStore {
         if (parent != null) base.put("parent_comment", parent)
         val alt = JSONObject(base.toString()).put("is_spoiler", false).put("attachments", JSONArray())
         var last = ""
-        for (b in listOf(base, alt)) {
-            try {
-                Api.raw("/comments", method = "POST", json = b)
-                return null
-            } catch (e: ApiException) {
-                last = e.message ?: ""
+        for (t in Api.commentTypes(postType)) {
+            for (b in listOf(base, alt)) {
+                try {
+                    b.put("post_type", t)
+                    Api.raw("/comments", method = "POST", json = b)
+                    Api.commentTypeWorked(postType, t)
+                    return null
+                } catch (e: ApiException) {
+                    last = e.message ?: ""
+                }
             }
         }
         return last

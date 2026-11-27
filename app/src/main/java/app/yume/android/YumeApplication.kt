@@ -14,6 +14,7 @@ class YumeApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         KV.init(this)
+        try { java.io.File(cacheDir, "share").deleteRecursively() } catch (_: Exception) {}
         app.yume.android.data.Kodik.init(this)
         Prefs.reload()
         Stores.loadAll()
