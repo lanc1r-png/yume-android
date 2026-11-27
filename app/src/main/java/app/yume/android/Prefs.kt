@@ -59,7 +59,7 @@ object Prefs {
     var autoNext by mutableStateOf(true)
         private set
 
-    var kodikDirect by mutableStateOf(false)
+    var kodikDirect by mutableStateOf(true)
         private set
 
     /** Ранобэ: «pages» или «scroll». */
@@ -87,7 +87,7 @@ object Prefs {
         keepAwake = KV.getBool(KEY_AWAKE, true)
         resume = KV.getBool(KEY_RESUME, true)
         autoNext = KV.getBool(KEY_AUTONEXT, true)
-        kodikDirect = KV.getBool(KEY_KODIK_DIRECT, false)
+        kodikDirect = KV.getBool(KEY_KODIK_DIRECT, true)
         novelMode = KV.getString(KEY_NOVEL_MODE, "scroll") ?: "scroll"
         novelAnim = KV.getString(KEY_NOVEL_ANIM, "book") ?: "book"
         offWifi = KV.getBool(KEY_OFF_WIFI, false)

@@ -1,6 +1,7 @@
 package app.yume.android.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -12,7 +13,15 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-class ApiException(val code: Int, val body: String) : Exception("Сервер вернул ошибку $code: $body")
+class ApiException(val code: Int, val body: String) : Exception(
+    if (code >= 500 || body.trimStart().startsWith("<")) {
+        "Сайт сейчас не отвечает (ошибка $code). Попробуйте позже."
+    } else if (code == 429) {
+        "Сайт просит подождать. Попробуйте через минуту."
+    } else {
+        "Сервер вернул ошибку $code: $body"
+    },
+)
 
 enum class Sort(val raw: String, val title: String, val aliases: List<String>) {
     RATING("rate_avg", "По рейтингу", listOf("rate_avg", "rating_score")),
@@ -109,11 +118,43 @@ object Api {
         }
         .build()
 
+    /** Не больше 4 запросов одновременно: сайт при перегрузке отвечает 429. */
+    private val gate = kotlinx.coroutines.sync.Semaphore(4)
+
+    /** Показывается, пока сайт просит подождать (429). */
+    var waitNote by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+
     suspend fun raw(
         path: String,
         query: List<Pair<String, String>> = emptyList(),
         method: String = "GET",
         json: JSONObject? = null,
+    ): String {
+        var attempt = 0
+        while (true) {
+            try {
+                val body = gate.withPermit { rawOnce(path, query, method, json) }
+                waitNote = null
+                return body
+            } catch (e: ApiException) {
+                if (e.code == 429 && attempt < 3) {
+                    attempt++
+                    waitNote = "Сайт просит подождать…"
+                    kotlinx.coroutines.delay(2500L * attempt)
+                    continue
+                }
+                waitNote = null
+                throw e
+            }
+        }
+    }
+
+    private suspend fun rawOnce(
+        path: String,
+        query: List<Pair<String, String>>,
+        method: String,
+        json: JSONObject?,
     ): String = withContext(Dispatchers.IO) {
         val site = Site.current
         val builder = "$BASE$path".toHttpUrl().newBuilder()
