@@ -8,6 +8,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import app.yume.android.data.MangaTitlePrefs
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
@@ -132,6 +142,19 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
 
     val chapter = chapters.getOrNull(index)
 
+    var tp by remember { mutableStateOf(MangaTitlePrefs.load(title.id)) }
+    fun updTp(n: MangaTitlePrefs) { tp = n; n.save(title.id) }
+    val own = tp.enabled
+    val effAnim = if (own) tp.anim else Prefs.mangaAnim
+    val effAutoBg = if (own) tp.autoBG else Prefs.mangaAutoBg
+    val effAutoNext = if (own) tp.autoNext else Prefs.mangaAutoNext
+    val effSpeed = if (own) tp.speed else Prefs.autoSpeed
+    val effDim = if (own) tp.dim else Prefs.fDim
+    val effWarm = if (own) tp.warm else Prefs.fWarm
+    val effGray = if (own) tp.gray else Prefs.fGray
+    var autoOn by remember { mutableStateOf(false) }
+    var showChapters by remember { mutableStateOf(false) }
+
     val autoVertical = run {
         val t = (title.type?.title ?: "").lowercase()
         if (t.contains("манхв") || t.contains("маньхуа") || t.contains("веб")) {
@@ -230,23 +253,44 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
         }
     }
 
-    val readerBg = if (Prefs.mangaAutoBg && MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.White else Color.Black
+    val readerBg = if (effAutoBg && MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.White else Color.Black
     Box(Modifier.fillMaxSize().background(readerBg)) {
         if (pages.isNotEmpty()) {
-            key(index, vertical, Prefs.mangaAnim) {
-                if (vertical) {
-                    ScrollReader(pages, startPage = shown, endCard = endCard, onPage = { shown = it }, onTap = toggleChrome)
-                } else {
-                    PagedReader(
-                        pages,
-                        startPage = shown,
-                        anim = Prefs.mangaAnim,
-                        endCard = endCard,
-                        onPage = { shown = it },
-                        onCenterTap = toggleChrome,
-                    )
+            Box(
+                Modifier.fillMaxSize().drawWithContent {
+                    if (effGray) {
+                        drawIntoCanvas { c ->
+                            val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+                            c.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), paint)
+                            drawContent()
+                            c.restore()
+                        }
+                    } else {
+                        drawContent()
+                    }
+                },
+            ) {
+                key(index, vertical, effAnim) {
+                    if (vertical) {
+                        ScrollReader(
+                            pages, startPage = shown, endCard = endCard, onPage = { shown = it }, onTap = toggleChrome,
+                            auto = autoOn, speed = effSpeed,
+                            onAutoEnd = { if (effAutoNext && index + 1 < chapters.size) go(1) else autoOn = false },
+                        )
+                    } else {
+                        PagedReader(
+                            pages,
+                            startPage = shown,
+                            anim = effAnim,
+                            endCard = endCard,
+                            onPage = { shown = it },
+                            onCenterTap = toggleChrome,
+                        )
+                    }
                 }
             }
+            if (effWarm > 0f) Box(Modifier.fillMaxSize().background(Color(0xFFFF9500).copy(alpha = effWarm * 0.35f)))
+            if (effDim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = effDim * 0.75f)))
         }
         if (loading) CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
         error?.let { e ->
@@ -285,6 +329,12 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
                         )
                     }
                 }
+                if (vertical) {
+                    IconButton(onClick = { autoOn = !autoOn; if (autoOn) chromeHidden = true }) {
+                        Icon(if (autoOn) Icons.Filled.Close else Icons.Filled.PlayArrow, "Автопрокрутка", tint = if (autoOn) Color(0xFFFFB74D) else Color.White)
+                    }
+                }
+                IconButton(onClick = { showChapters = true }) { Icon(Icons.AutoMirrored.Filled.List, "Главы", tint = Color.White) }
                 IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.MoreVert, "Режим чтения", tint = Color.White) }
                 IconButton(onClick = { showComments = true }) { Icon(Icons.Filled.Send, "Комментарии", tint = Color.White) }
             }
@@ -348,18 +398,59 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Свои настройки для этого тайтла", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                    androidx.compose.material3.Switch(
+                        checked = own,
+                        onCheckedChange = { on ->
+                            if (on && !tp.enabled) {
+                                updTp(MangaTitlePrefs(true, Prefs.mangaAnim, Prefs.mangaAutoBg, Prefs.mangaAutoNext, Prefs.autoSpeed, Prefs.fDim, Prefs.fWarm, Prefs.fGray))
+                            } else updTp(tp.copy(enabled = on))
+                        },
+                    )
+                }
                 Text("Листание страниц", style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for ((k, label) in listOf("slide" to "Сдвиг", "fade" to "Плавно", "book" to "Как в книге")) {
                         FilterChip(
-                            selected = Prefs.mangaAnim == k,
-                            onClick = { Prefs.selectMangaAnim(k) },
+                            selected = effAnim == k,
+                            onClick = { if (own) updTp(tp.copy(anim = k)) else Prefs.selectMangaAnim(k) },
                             label = { Text(label) },
                         )
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Фон под страницу по теме", Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = effAutoBg, onCheckedChange = { if (own) updTp(tp.copy(autoBG = it)) else Prefs.updateMangaAutoBg(it) })
+                }
+                Text("Фильтры", style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Чёрно-белое", Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = effGray, onCheckedChange = { if (own) updTp(tp.copy(gray = it)) else Prefs.updateFGray(it) })
+                }
+                Text("Затемнение", style = MaterialTheme.typography.bodySmall)
+                androidx.compose.material3.Slider(value = effDim, onValueChange = { if (own) updTp(tp.copy(dim = it)) else Prefs.updateFDim(it) })
+                Text("Тёплый свет", style = MaterialTheme.typography.bodySmall)
+                androidx.compose.material3.Slider(value = effWarm, onValueChange = { if (own) updTp(tp.copy(warm = it)) else Prefs.updateFWarm(it) })
+                Text("Автопрокрутка ленты", style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Скорость: ${effSpeed.toInt()}", Modifier.weight(1f))
+                }
+                androidx.compose.material3.Slider(
+                    value = effSpeed, valueRange = 15f..240f,
+                    onValueChange = { v -> val r = (v / 5).toInt() * 5f; if (own) updTp(tp.copy(speed = r)) else Prefs.updateAutoSpeed(r) },
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("После главы открывать следующую", Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = effAutoNext, onCheckedChange = { if (own) updTp(tp.copy(autoNext = it)) else Prefs.updateMangaAutoNext(it) })
+                }
+                Text("Кнопка ▶ вверху включает автопрокрутку в режиме ленты.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+
+    if (showChapters) {
+        MangaChapterPicker(chapters, index, title.readKey, onPick = { index = it; showChapters = false }, onClose = { showChapters = false })
     }
 
     if (showComments && chapter != null) {
@@ -523,8 +614,32 @@ private fun ScrollReader(
     endCard: @Composable () -> Unit,
     onPage: (Int) -> Unit,
     onTap: () -> Unit,
+    auto: Boolean = false,
+    speed: Float = 60f,
+    onAutoEnd: () -> Unit = {},
 ) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startPage.coerceIn(0, pages.size))
+    val speedNow by androidx.compose.runtime.rememberUpdatedState(speed)
+    LaunchedEffect(auto) {
+        if (!auto) return@LaunchedEffect
+        var last = 0L
+        var acc = 0f
+        var stuck = 0
+        while (true) {
+            val now = androidx.compose.runtime.withFrameNanos { it }
+            if (last != 0L) {
+                acc += speedNow * (now - last) / 1_000_000_000f
+                val px = acc.toInt()
+                if (px >= 1) {
+                    acc -= px
+                    val moved = listState.scrollBy(px.toFloat())
+                    if (moved < 0.5f) stuck++ else stuck = 0
+                    if (stuck > 30) { onAutoEnd(); return@LaunchedEffect }
+                }
+            }
+            last = now
+        }
+    }
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { onPage(it) }
     }

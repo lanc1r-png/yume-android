@@ -25,7 +25,12 @@ object Prefs {
     const val KEY_OFF_WIFI = "off.wifi"
     const val KEY_OFF_PREFETCH = "off.prefetch"
     const val KEY_HAPTICS = "set.haptics"
-    const val KEY_MANGA_BG = "manga.autoBG"
+    const val KEY_MANGA_BG = "manga.autobg"
+    const val KEY_AUTO_SPEED = "manga.auto.speed"
+    const val KEY_AUTO_NEXT = "manga.auto.next"
+    const val KEY_F_DIM = "manga.f.dim"
+    const val KEY_F_WARM = "manga.f.warm"
+    const val KEY_F_GRAY = "manga.f.gray"
     const val KEY_OFF_LIMIT = "off.limitGB"
     const val KEY_OFF_OVERFLOW = "off.overflow"
     const val KEY_BACKUP_SENT = "backup.sent"
@@ -83,7 +88,23 @@ object Prefs {
     var haptics by mutableStateOf(true)
         private set
 
-    var mangaAutoBg by mutableStateOf(true)
+    var mangaAutoBg by mutableStateOf(false)
+        private set
+
+    /** Автопрокрутка ленты: пикселей в секунду. */
+    var autoSpeed by mutableStateOf(60f)
+        private set
+
+    var mangaAutoNext by mutableStateOf(true)
+        private set
+
+    var fDim by mutableStateOf(0f)
+        private set
+
+    var fWarm by mutableStateOf(0f)
+        private set
+
+    var fGray by mutableStateOf(false)
         private set
 
     /** Лимит места под загрузки, ГБ (0 — без лимита). */
@@ -107,7 +128,12 @@ object Prefs {
         accent = KV.getString(KEY_ACCENT, "dynamic") ?: "dynamic"
         tapZones = KV.getBool(KEY_TAPZONES, true)
         haptics = KV.getBool(KEY_HAPTICS, true)
-        mangaAutoBg = KV.getBool(KEY_MANGA_BG, true)
+        mangaAutoBg = KV.getBool(KEY_MANGA_BG, false)
+        autoSpeed = KV.getFloat(KEY_AUTO_SPEED, 60f)
+        mangaAutoNext = KV.getBool(KEY_AUTO_NEXT, true)
+        fDim = KV.getFloat(KEY_F_DIM, 0f)
+        fWarm = KV.getFloat(KEY_F_WARM, 0f)
+        fGray = KV.getBool(KEY_F_GRAY, false)
         offLimit = KV.getString(KEY_OFF_LIMIT, "0")?.toIntOrNull() ?: 0
         offOverflow = KV.getString(KEY_OFF_OVERFLOW, "refuse") ?: "refuse"
         backupSent = KV.getString(KEY_BACKUP_SENT, "0")?.toLongOrNull() ?: 0L
@@ -128,6 +154,11 @@ object Prefs {
     fun selectNovelAnim(v: String) { novelAnim = v; KV.putString(KEY_NOVEL_ANIM, v) }
     fun updateOffWifi(v: Boolean) { offWifi = v; KV.putBool(KEY_OFF_WIFI, v) }
     fun updateOffPrefetch(v: Boolean) { offPrefetch = v; KV.putBool(KEY_OFF_PREFETCH, v) }
+    fun updateAutoSpeed(v: Float) { autoSpeed = v; KV.putFloat(KEY_AUTO_SPEED, v) }
+    fun updateMangaAutoNext(v: Boolean) { mangaAutoNext = v; KV.putBool(KEY_AUTO_NEXT, v) }
+    fun updateFDim(v: Float) { fDim = v; KV.putFloat(KEY_F_DIM, v) }
+    fun updateFWarm(v: Float) { fWarm = v; KV.putFloat(KEY_F_WARM, v) }
+    fun updateFGray(v: Boolean) { fGray = v; KV.putBool(KEY_F_GRAY, v) }
     fun updateHaptics(v: Boolean) { haptics = v; KV.putBool(KEY_HAPTICS, v) }
     fun updateMangaAutoBg(v: Boolean) { mangaAutoBg = v; KV.putBool(KEY_MANGA_BG, v) }
     fun selectOffLimit(v: Int) { offLimit = v; KV.putString(KEY_OFF_LIMIT, v.toString()) }
