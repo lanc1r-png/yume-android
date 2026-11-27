@@ -291,11 +291,8 @@ fun LoginScreen(onClose: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Закрыть") }
-            Text("Вход через сайт", style = MaterialTheme.typography.titleMedium)
-        }
+    Column(Modifier.fillMaxSize()) {
+        OneHeader("Вход через сайт", onClose)
         Text(
             "Войдите на сайте как обычно. Как только вход завершится, приложение подхватит его само.",
             Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

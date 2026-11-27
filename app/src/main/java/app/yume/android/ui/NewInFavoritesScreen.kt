@@ -90,11 +90,8 @@ fun NewInFavoritesScreen(onClose: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-            Text("Новое", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
+    Column(Modifier.fillMaxSize()) {
+        OneHeader("Новое", onClose)
         LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Column(

@@ -92,10 +92,8 @@ fun FriendsScreen(onClose: () -> Unit) {
     }
 
     val list = FriendsModel.merged(FriendsModel.friends.toList(), LocalFriends.items.toList())
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-            Text("Друзья", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+    Column(Modifier.fillMaxSize()) {
+        OneHeader("Друзья", onClose) {
             TextButton(onClick = { syncing = true }) { Text("Синхронизировать") }
         }
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -317,7 +315,7 @@ fun FriendProfileScreen(route: Route.FriendProfile, onClose: () -> Unit) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+                    BackCircle(onClose)
                 }
                 Box(Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(20.dp))) { RemoteImage(friend.cover, Modifier.fillMaxSize()) }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

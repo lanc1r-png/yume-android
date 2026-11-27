@@ -155,7 +155,7 @@ fun DetailScreen(initial: Title) {
             TopAppBar(
                 title = { Text(t.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = { Nav.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+                    BackCircle({ Nav.pop() }, Modifier.padding(start = 8.dp))
                 },
                 actions = {
                     t.siteUrl?.let { url ->

@@ -88,7 +88,7 @@ fun AuthorScreen(route: Route.Author) {
             TopAppBar(
                 title = { Text(route.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = { Nav.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+                    BackCircle({ Nav.pop() }, Modifier.padding(start = 8.dp))
                 },
             )
         },

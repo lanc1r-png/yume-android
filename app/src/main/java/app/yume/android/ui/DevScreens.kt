@@ -69,11 +69,7 @@ private fun copy(ctx: Context, text: String) {
 
 @Composable
 private fun TopBar(title: String, onClose: () -> Unit, actions: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().statusBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, maxLines = 1)
-        actions()
-    }
+    OneHeader(title, onClose) { actions() }
 }
 
 /** Журнал запросов сайта: что и с каким кодом ответил сервер. */

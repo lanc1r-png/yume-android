@@ -54,13 +54,11 @@ fun OfflineLibraryScreen(onClose: () -> Unit) {
     val list = OfflineStore.entries.values.sortedByDescending { it.updated }
     var confirm by remember { mutableStateOf<OfflineEntry?>(null) }
     var confirmAll by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
-            Column(Modifier.weight(1f)) {
-                Text("Скачанное", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("${OfflineStore.totalChapters()} гл. · ${fmt(OfflineStore.totalBytes())}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+    Column(Modifier.fillMaxSize()) {
+        OneHeader(
+            "Скачанное", onClose,
+            subtitle = "${OfflineStore.totalChapters()} гл. · ${fmt(OfflineStore.totalBytes())}",
+        ) {
             if (list.isNotEmpty()) TextButton(onClick = { confirmAll = true }) { Text("Удалить всё") }
         }
         if (DownloadManager.pending.isNotEmpty()) {
