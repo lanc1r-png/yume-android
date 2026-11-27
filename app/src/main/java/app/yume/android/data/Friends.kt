@@ -92,7 +92,11 @@ object FriendParser {
             var online: Boolean? = if (c.has("is_online")) c.optBoolean("is_online") else if (c.has("online")) c.optBoolean("online") else null
             var seen: Long? = null
             for (k in listOf("last_online_at", "last_seen_at", "last_online", "last_activity_at", "last_seen")) {
-                date(c.opt(k))?.let { seen = it; break }
+                val dt = date(c.opt(k))
+                if (dt != null) {
+                    seen = dt
+                    break
+                }
             }
             if (online == null && seen != null) online = System.currentTimeMillis() - seen!! < 300_000
             val st = c.optJSONObject("login_streak")
