@@ -100,6 +100,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.yume.android.Prefs
 import app.yume.android.Route
+import app.yume.android.data.Bookmark
+import app.yume.android.data.BookmarkStore
+import app.yume.android.data.Highlight
+import app.yume.android.data.HighlightStore
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import app.yume.android.data.Api
 import app.yume.android.data.Block
 import app.yume.android.data.Chapter
@@ -123,17 +130,22 @@ sealed class NovelPage {
     class Img(val url: String) : NovelPage()
 }
 
-private fun paintOf(fontPx: Float, serif: Boolean, color: Int) = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
+private fun paintOf(fontPx: Float, serif: Boolean, color: Int, bold: Boolean = false) = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
     textSize = fontPx
     this.color = color
-    typeface = if (serif) Typeface.SERIF else Typeface.SANS_SERIF
+    val base = if (serif) Typeface.SERIF else Typeface.SANS_SERIF
+    typeface = if (bold && android.os.Build.VERSION.SDK_INT >= 28) Typeface.create(base, 600, false) else base
 }
 
-private fun layoutOf(text: CharSequence, widthPx: Int, fontPx: Float, serif: Boolean, lineGap: Float, color: Int): StaticLayout =
-    StaticLayout.Builder.obtain(text, 0, text.length, paintOf(fontPx, serif, color), widthPx)
+private fun layoutOf(
+    text: CharSequence, widthPx: Int, fontPx: Float, serif: Boolean, lineGap: Float, color: Int,
+    bold: Boolean = false, justify: Boolean = false,
+): StaticLayout =
+    StaticLayout.Builder.obtain(text, 0, text.length, paintOf(fontPx, serif, color, bold), widthPx)
         .setLineSpacing(fontPx * lineGap, 1f)
         .setIncludePad(false)
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setJustificationMode(if (justify) Layout.JUSTIFICATION_MODE_INTER_WORD else Layout.JUSTIFICATION_MODE_NONE)
         .build()
 
 /** Режет главу на страницы по размеру экрана: сначала весь текст до иллюстрации собирается и делится по строкам. */
@@ -146,6 +158,9 @@ private fun paginate(
     serif: Boolean,
     lineGap: Float,
     color: Int,
+    bold: Boolean = false,
+    justify: Boolean = false,
+    indent: Boolean = false,
 ): List<NovelPage> {
     val pages = ArrayList<NovelPage>()
     var sb = SpannableStringBuilder()
@@ -175,7 +190,7 @@ private fun paginate(
 
     fun flush() {
         if (sb.isEmpty()) return
-        val layout = layoutOf(sb, widthPx, fontPx, serif, lineGap, color)
+        val layout = layoutOf(sb, widthPx, fontPx, serif, lineGap, color, bold, justify)
         var s = 0
         val n = layout.lineCount
         while (s < n && pages.size < 3000) {
@@ -200,7 +215,9 @@ private fun paginate(
     for (b in blocks) {
         when (b) {
             is Block.Para -> {
+                val ps = sb.length
                 for (r in b.runs) append(r.text, r.bold, r.italic)
+                if (indent && sb.length > ps) sb.setSpan(LeadingMarginSpan.Standard((fontPx * 1.5f).toInt(), 0), ps, sb.length, flags)
                 append("\n")
                 gap()
             }
@@ -272,6 +289,18 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
     var pagesFor by remember { mutableIntStateOf(-1) }
     var showChapters by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var bold by remember { mutableStateOf(KV.getBool("reader.bold", false)) }
+    var margin by remember { mutableFloatStateOf(KV.getFloat("reader.margin", 24f)) }
+    var justify by remember { mutableStateOf(KV.getBool("reader.justify", false)) }
+    var indent by remember { mutableStateOf(KV.getBool("reader.indent", false)) }
+    var dimV by remember { mutableFloatStateOf(KV.getFloat("reader.dim", 0f)) }
+    var warmV by remember { mutableFloatStateOf(KV.getFloat("reader.warm", 0f)) }
+    var visibleBlock by remember { mutableIntStateOf(0) }
+    var pendingBlock by remember { mutableStateOf<Int?>(null) }
+    var showBookmarks by remember { mutableStateOf(false) }
+    var hlBlock by remember { mutableStateOf<Int?>(null) }
+    val hlTick = HighlightStore.items.size + HighlightStore.items.sumOf { it.color + it.note.length }
+    val bmTick = BookmarkStore.items.size
 
     val pagerState = rememberPagerState(pageCount = { pages.size + 1 })
     val colors = colorsFor(theme, systemDark)
@@ -364,15 +393,24 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                 onNext = { index++ },
                 onTap = { chromeHidden = !chromeHidden },
                 key = index,
+                bold = bold, justify = justify, indent = indent, margin = margin,
+                highlights = remember(hlTick, index) {
+                    HighlightStore.items.filter { it.titleKey == title.readKey && it.chapterID == chapters.getOrNull(index)?.id }
+                        .associate { it.start to it.color }
+                },
+                scrollTo = pendingBlock,
+                onScrolled = { pendingBlock = null },
+                onVisible = { visibleBlock = it },
+                onLongBlock = { hlBlock = it },
             )
         } else {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val widthPx = with(density) { (maxWidth - 48.dp).roundToPx() }
+                val widthPx = with(density) { (maxWidth - (margin * 2).dp).roundToPx() }
                 val heightPx = with(density) { (maxHeight - 96.dp).roundToPx() }
                 val fontPx = with(density) { fontSize.sp.toPx() }
                 val fgInt = colors.fg.toArgb()
 
-                LaunchedEffect(blocks, fontSize, serif, lineGap, fgInt, widthPx, heightPx, index) {
+                LaunchedEffect(blocks, fontSize, serif, lineGap, fgInt, widthPx, heightPx, index, bold, justify, indent) {
                     if (loading || blocks.isEmpty() || widthPx < 100) {
                         pages = emptyList()
                         return@LaunchedEffect
@@ -383,11 +421,15 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                     val oldCount = if (sameChapter) pages.size else 0
                     val oldIndex = if (sameChapter) pagerState.currentPage else 0
                     val result = withContext(Dispatchers.Default) {
-                        paginate(blocks, t, widthPx, heightPx, fontPx, serif, lineGap, fgInt)
+                        paginate(blocks, t, widthPx, heightPx, fontPx, serif, lineGap, fgInt, bold, justify, indent)
                     }
                     pages = result
                     pagesFor = index
-                    val target = if (oldCount > 0) (oldIndex.toFloat() / oldCount * result.size).toInt() else 0
+                    val pb = pendingBlock
+                    val target = if (pb != null && blocks.isNotEmpty()) {
+                        pendingBlock = null
+                        (pb.toFloat() / blocks.size * result.size).toInt()
+                    } else if (oldCount > 0) (oldIndex.toFloat() / oldCount * result.size).toInt() else 0
                     paginating = false
                     pagerState.scrollToPage(target.coerceIn(0, result.size))
                 }
@@ -426,13 +468,13 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                             if (p < pages.size) {
                                 when (val pg = pages[p]) {
                                     is NovelPage.Text -> {
-                                        val layout = remember(pg, widthPx, fontPx, serif, lineGap, fgInt) {
-                                            layoutOf(pg.text, widthPx, fontPx, serif, lineGap, fgInt)
+                                        val layout = remember(pg, widthPx, fontPx, serif, lineGap, fgInt, bold, justify) {
+                                            layoutOf(pg.text, widthPx, fontPx, serif, lineGap, fgInt, bold, justify)
                                         }
                                         Canvas(Modifier.fillMaxSize()) {
                                             drawIntoCanvas { c ->
                                                 c.nativeCanvas.save()
-                                                c.nativeCanvas.translate(24.dp.toPx(), 48.dp.toPx())
+                                                c.nativeCanvas.translate(margin.dp.toPx(), 48.dp.toPx())
                                                 layout.draw(c.nativeCanvas)
                                                 c.nativeCanvas.restore()
                                             }
@@ -443,7 +485,7 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                                             model = pg.url,
                                             contentDescription = null,
                                             contentScale = ContentScale.Fit,
-                                            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 48.dp),
+                                            modifier = Modifier.fillMaxSize().padding(horizontal = margin.dp, vertical = 48.dp),
                                         )
                                     }
                                 }
@@ -478,6 +520,9 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
             }
         }
 
+        if (warmV > 0f) Box(Modifier.fillMaxSize().background(Color(0xFFFF9500).copy(alpha = warmV * 0.3f)))
+        if (dimV > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dimV * 0.7f)))
+
         AnimatedVisibility(
             visible = !chromeHidden,
             modifier = Modifier.align(Alignment.TopCenter),
@@ -501,6 +546,18 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    val curCh = chapters.getOrNull(index)
+                    val posNow = if (mode == "scroll") visibleBlock else if (pages.isNotEmpty() && blocks.isNotEmpty()) (pagerState.currentPage.toFloat() / pages.size * blocks.size).toInt().coerceIn(0, blocks.size - 1) else 0
+                    val here = if (curCh != null) BookmarkStore.find(title.readKey, curCh.id, posNow - 3, posNow + 4) else null
+                    @Suppress("UNUSED_VARIABLE") val tick = bmTick
+                    IconButton(onClick = {
+                        if (curCh == null) return@IconButton
+                        if (here != null) BookmarkStore.remove(here.id) else {
+                            val snip = (blocks.getOrNull(posNow) as? Block.Para)?.runs?.joinToString("") { it.text }?.take(120) ?: ""
+                            BookmarkStore.add(Bookmark(titleKey = title.readKey, chapterID = curCh.id, chapterLabel = curCh.title, position = posNow, isText = true, snippet = snip))
+                        }
+                    }) { Text(if (here != null) "★" else "☆", style = MaterialTheme.typography.titleLarge) }
+                    IconButton(onClick = { showBookmarks = true }) { Icon(Icons.AutoMirrored.Filled.List, "Закладки и заметки") }
                     IconButton(onClick = { showComments = true }) { Icon(Icons.Filled.Create, "Комментарии к главе") }
                 }
             }
@@ -542,23 +599,30 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
     }
 
     if (showChapters) {
-        ModalBottomSheet(onDismissRequest = { showChapters = false }) {
-            LazyColumn(Modifier.padding(horizontal = 8.dp)) {
-                items(chapters.size) { i ->
-                    val c = chapters[i]
-                    TextButton(onClick = { index = i; showChapters = false }, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Том ${c.volume} Глава ${c.number}" + if (c.name.isNotEmpty()) " · ${c.name}" else "",
-                            Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            fontWeight = if (i == index) FontWeight.Bold else FontWeight.Normal,
-                            color = if (ReadStore.isRead(title.readKey, c.id) && i != index) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+        MangaChapterPicker(chapters, index, title.readKey, onPick = { index = it; showChapters = false }, onClose = { showChapters = false })
+    }
+
+    if (showBookmarks) {
+        BookmarksSheet(
+            titleKey = title.readKey, chapters = chapters,
+            onJump = { chId, pos ->
+                val ci = chapters.indexOfFirst { it.id == chId }
+                if (ci >= 0) {
+                    pendingBlock = pos
+                    if (ci != index) index = ci
+                    else if (mode == "scroll") { /* ScrollBody подхватит pendingBlock */ } else pendingBlock = null
                 }
-            }
-        }
+                showBookmarks = false
+            },
+            onClose = { showBookmarks = false },
+        )
+    }
+
+    hlBlock?.let { b ->
+        val ch = chapters.getOrNull(index)
+        if (ch != null) HighlightDialog(
+            titleKey = title.readKey, chapter = ch, block = b, blocks = blocks, onClose = { hlBlock = null },
+        )
     }
 
     if (showSettings) {
@@ -596,6 +660,24 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                         FilterChip(selected = lineGap == v, onClick = { lineGap = v; KV.putFloat("reader.lh", v) }, label = { Text(l) })
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Жирный шрифт", Modifier.weight(1f))
+                    Switch(checked = bold, onCheckedChange = { bold = it; KV.putBool("reader.bold", it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Выравнивание по ширине", Modifier.weight(1f))
+                    Switch(checked = justify, onCheckedChange = { justify = it; KV.putBool("reader.justify", it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Красная строка", Modifier.weight(1f))
+                    Switch(checked = indent, onCheckedChange = { indent = it; KV.putBool("reader.indent", it) })
+                }
+                Text("Поля: ${margin.toInt()}")
+                androidx.compose.material3.Slider(value = margin, valueRange = 8f..48f, onValueChange = { margin = (it / 2).toInt() * 2f; KV.putFloat("reader.margin", margin) })
+                Text("Затемнение")
+                androidx.compose.material3.Slider(value = dimV, onValueChange = { dimV = it; KV.putFloat("reader.dim", it) })
+                Text("Тёплый свет")
+                androidx.compose.material3.Slider(value = warmV, onValueChange = { warmV = it; KV.putFloat("reader.warm", it) })
                 Text("Тема")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for ((k, l) in listOf("auto" to "Как в системе", "dark" to "Тёмная", "sepia" to "Сепия", "light" to "Светлая")) {
@@ -628,8 +710,23 @@ private fun ScrollBody(
     onNext: () -> Unit,
     onTap: () -> Unit,
     key: Int,
+    bold: Boolean = false,
+    justify: Boolean = false,
+    indent: Boolean = false,
+    margin: Float = 16f,
+    highlights: Map<Int, Int> = emptyMap(),
+    scrollTo: Int? = null,
+    onScrolled: () -> Unit = {},
+    onVisible: (Int) -> Unit = {},
+    onLongBlock: (Int) -> Unit = {},
 ) {
     val family = if (serif) FontFamily.Serif else FontFamily.SansSerif
+    val baseWeight = if (bold) FontWeight.SemiBold else null
+    val textAlign = if (justify) androidx.compose.ui.text.style.TextAlign.Justify else androidx.compose.ui.text.style.TextAlign.Start
+    val paraIndent = if (indent) androidx.compose.ui.text.style.TextIndent(firstLine = (fontSize * 1.5f).sp) else androidx.compose.ui.text.style.TextIndent.None
+    fun hl(i: Int): Modifier = highlights[i]?.let { c ->
+        Modifier.background(Color(Highlight.PALETTE[c.coerceIn(0, 3)]).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+    } ?: Modifier
     val lh = (fontSize * (1.2f + lineGap)).sp
     val words = remember(blocks) {
         blocks.sumOf { b ->
@@ -644,10 +741,19 @@ private fun ScrollBody(
     val minutes = maxOf(1, Math.round(words / 180.0).toInt())
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(key) { listState.scrollToItem(0) }
+    LaunchedEffect(scrollTo, loading, blocks.size) {
+        val t = scrollTo ?: return@LaunchedEffect
+        if (loading || blocks.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem((t + 2).coerceAtMost(blocks.size + 1))
+        onScrolled()
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { onVisible(maxOf(0, it - 2)) }
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { onTap() } },
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 88.dp, bottom = 130.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = margin.dp, end = margin.dp, top = 88.dp, bottom = 130.dp),
         verticalArrangement = Arrangement.spacedBy((fontSize * (0.5f + lineGap)).dp),
     ) {
         item {
@@ -673,6 +779,9 @@ private fun ScrollBody(
                         }
                     },
                     color = colors.fg, fontFamily = family, fontSize = fontSize.sp, lineHeight = lh,
+                    fontWeight = baseWeight, textAlign = textAlign,
+                    style = androidx.compose.ui.text.TextStyle(textIndent = paraIndent),
+                    modifier = Modifier.fillMaxWidth().then(hl(i)).pointerInput(i) { detectTapGestures(onLongPress = { onLongBlock(i) }, onTap = { onTap() }) },
                 )
                 is Block.Heading -> Text(b.text, color = colors.fg, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (fontSize + 4).sp)
                 is Block.Quote -> {
@@ -721,4 +830,95 @@ fun ChapterDownloadButton(title: Title, chapter: Chapter, all: List<Chapter>) {
         if (queued) DownloadManager.cancel(chapter.id)
         else if (!saved) DownloadManager.enqueue(title, all, listOf(chapter))
     }) { Text(label) }
+}
+
+
+/** Закладки, выделения и заметки к этому тайтлу. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun BookmarksSheet(titleKey: Int, chapters: List<Chapter>, onJump: (Int, Int) -> Unit, onClose: () -> Unit) {
+    var tab by remember { mutableIntStateOf(0) }
+    val bms = BookmarkStore.items.filter { it.titleKey == titleKey }.sortedByDescending { it.created }
+    val hls = HighlightStore.items.filter { it.titleKey == titleKey }.sortedByDescending { it.created }
+    var noteFor by remember { mutableStateOf<String?>(null) }
+    var noteText by remember { mutableStateOf("") }
+    ModalBottomSheet(onDismissRequest = onClose) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Закладки и заметки", style = MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = tab == 0, onClick = { tab = 0 }, label = { Text("Закладки ${bms.size}") })
+                FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text("Выделения ${hls.size}") })
+            }
+            LazyColumn(Modifier.height(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (tab == 0) {
+                    if (bms.isEmpty()) item { Text("Закладок пока нет. Нажмите значок закладки вверху в читалке.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    items(bms, key = { it.id }) { b ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainer).clickable { onJump(b.chapterID, b.position) }.padding(12.dp)) {
+                            Text(b.chapterLabel, fontWeight = FontWeight.SemiBold)
+                            if (b.snippet.isNotEmpty()) Text(b.snippet, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                            if (b.note.isNotEmpty()) Text("✎ ${b.note}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                            Row {
+                                TextButton(onClick = { noteFor = b.id; noteText = b.note }) { Text("Заметка") }
+                                TextButton(onClick = { BookmarkStore.remove(b.id) }) { Text("Удалить") }
+                            }
+                        }
+                    }
+                } else {
+                    if (hls.isEmpty()) item { Text("Выделений пока нет. Нажмите и удерживайте абзац в режиме прокрутки.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    items(hls, key = { it.id }) { h ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(Highlight.PALETTE[h.color.coerceIn(0, 3)]).copy(alpha = 0.18f)).clickable { onJump(h.chapterID, h.start) }.padding(12.dp)) {
+                            Text(h.chapterLabel, fontWeight = FontWeight.SemiBold)
+                            Text(h.snippet, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                            if (h.note.isNotEmpty()) Text("✎ ${h.note}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { HighlightStore.remove(h.id) }) { Text("Удалить") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    noteFor?.let { id ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { noteFor = null },
+            title = { Text("Заметка") },
+            text = { androidx.compose.material3.OutlinedTextField(noteText, { noteText = it }, Modifier.fillMaxWidth()) },
+            confirmButton = { TextButton(onClick = { BookmarkStore.setNote(id, noteText); noteFor = null }) { Text("Сохранить") } },
+            dismissButton = { TextButton(onClick = { noteFor = null }) { Text("Отмена") } },
+        )
+    }
+}
+
+/** Цвет и заметка для абзаца, на котором держали палец. */
+@Composable
+private fun HighlightDialog(titleKey: Int, chapter: Chapter, block: Int, blocks: List<Block>, onClose: () -> Unit) {
+    val existing = HighlightStore.block(titleKey, chapter.id, block)
+    var note by remember { mutableStateOf(existing?.note ?: "") }
+    val snippet = (blocks.getOrNull(block) as? Block.Para)?.runs?.joinToString("") { it.text } ?: ""
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Выделить абзац") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(snippet.take(160), style = MaterialTheme.typography.bodySmall, maxLines = 4)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    for ((i, c) in Highlight.PALETTE.withIndex()) {
+                        Box(
+                            Modifier.size(38.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(c))
+                                .clickable { HighlightStore.set(titleKey, chapter.id, chapter.title, block, snippet, i, note.ifEmpty { null }); onClose() },
+                        )
+                    }
+                }
+                androidx.compose.material3.OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth(), label = { Text("Заметка") })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { HighlightStore.set(titleKey, chapter.id, chapter.title, block, snippet, existing?.color ?: 0, note); onClose() }) { Text("Сохранить") }
+        },
+        dismissButton = {
+            Row {
+                if (existing != null) TextButton(onClick = { HighlightStore.remove(existing.id); onClose() }) { Text("Убрать") }
+                TextButton(onClick = onClose) { Text("Отмена") }
+            }
+        },
+    )
 }

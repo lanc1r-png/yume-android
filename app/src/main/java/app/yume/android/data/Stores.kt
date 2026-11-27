@@ -394,6 +394,8 @@ object Stores {
         ProgressStore.load()
         FavMetaStore.load()
         LocalFriends.load()
+        BookmarkStore.load()
+        HighlightStore.load()
         ReadStore.load()
         SearchHistory.load()
     }
