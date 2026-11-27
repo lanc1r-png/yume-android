@@ -72,6 +72,25 @@ object HomeModel {
 
     private var loadedFor = ""
 
+    /** «Лучшее по рейтингу» меняется редко: берём из кэша, обновляем раз в сутки. */
+    private fun topKey() = "home.top.${Site.current.key}"
+
+    private fun today() = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+    private fun loadTopCache(): List<Title>? = try {
+        val o = org.json.JSONObject(app.yume.android.data.KV.getString(topKey(), null) ?: return null)
+        if (o.optString("day") != today()) null
+        else o.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { Title.fromJson(a.getJSONObject(it)) } }?.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun saveTopCache(list: List<Title>) {
+        val a = org.json.JSONArray()
+        list.forEach { a.put(it.toJson()) }
+        app.yume.android.data.KV.putString(topKey(), org.json.JSONObject().put("day", today()).put("items", a).toString())
+    }
+
     suspend fun load(force: Boolean = false) {
         if (loading) return
         val key = Site.current.key
@@ -88,24 +107,29 @@ object HomeModel {
         if (!force && fresh.isNotEmpty()) return
         loading = true
         try {
+            val cachedTop = loadTopCache()
+            if (cachedTop != null && top.isEmpty()) top = cachedTop
             coroutineScope {
-                val a = async { fetch(Sort.LAST) }
-                val b = async { fetch(Sort.VIEWS) }
-                val c = async { fetch(Sort.NEWEST) }
-                val d = async { fetch(Sort.RATING) }
-                val ra = a.await()
-                val rb = b.await()
-                val rc = c.await()
-                val rd = d.await()
-                ra?.let { fresh = it.items }
-                rb?.let {
-                    popular = it.items
-                    popularPage = 1
-                    popularHasNext = it.hasNext
-                }
-                rc?.let { newest = it.items }
-                rd?.let { top = it.items }
-                error = if (ra == null && rb == null && rc == null && rd == null) {
+                // каждая лента показывается, как только загрузится, а не ждёт остальные
+                val jobs = listOf(
+                    launch { fetch(Sort.LAST)?.let { fresh = it.items } },
+                    launch {
+                        fetch(Sort.VIEWS)?.let {
+                            popular = it.items
+                            popularPage = 1
+                            popularHasNext = it.hasNext
+                        }
+                    },
+                    launch { fetch(Sort.NEWEST)?.let { newest = it.items } },
+                    launch {
+                        if (cachedTop == null || force) fetch(Sort.RATING)?.let {
+                            top = it.items
+                            saveTopCache(it.items)
+                        }
+                    },
+                )
+                jobs.forEach { it.join() }
+                error = if (fresh.isEmpty() && popular.isEmpty() && newest.isEmpty() && top.isEmpty()) {
                     "Не удалось загрузить данные. Проверьте соединение."
                 } else {
                     null
@@ -197,15 +221,27 @@ fun HomeScreen() {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(if (site.isAnime) "Продолжить смотреть" else "Продолжить читать", actionText = "Очистить", onAction = { HistoryStore.clear() })
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(HistoryStore.items.toList(), key = { it.title.id }) { h ->
-                            ContinueCard(h, onClick = { Nav.push(Route.Detail(h.title)) })
+                    ContinueHero(HistoryStore.items.first())
+                    val rest = HistoryStore.items.drop(1)
+                    if (rest.isNotEmpty()) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(rest, key = { it.title.id }) { h ->
+                                ContinueCard(h, onClick = { Nav.push(Route.Detail(h.title)) })
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        val pool = HomeModel.top.ifEmpty { HomeModel.popular }
+        if (pool.isNotEmpty()) {
+            item {
+                val day = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
+                TodayHero(pool[day % pool.size])
             }
         }
 

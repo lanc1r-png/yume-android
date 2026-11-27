@@ -270,6 +270,8 @@ fun DetailScreen(initial: Title) {
                 }
             }
 
+            item(key = "similar") { SimilarSection(t) }
+
             t.authors?.takeIf { it.isNotEmpty() }?.let { au ->
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -542,6 +544,45 @@ private fun BookmarkSheet(t: Title, onDismiss: () -> Unit) {
                 ) { Text("Убрать из списков") }
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+
+@Composable
+private fun SimilarSection(t: Title) {
+    var rel by remember(t.id) { mutableStateOf<List<Title>>(emptyList()) }
+    var sim by remember(t.id) { mutableStateOf<List<Title>>(emptyList()) }
+    var note by remember(t.id) { mutableStateOf("") }
+    var loaded by remember(t.id) { mutableStateOf(false) }
+    LaunchedEffect(t.id) {
+        val slug = t.slugUrl ?: return@LaunchedEffect
+        try {
+            val r = Api.similarTitles(slug)
+            rel = r.related
+            sim = r.similar
+            note = r.note
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            note = e.message ?: ""
+        }
+        loaded = true
+    }
+    @Composable
+    fun row(title: String, list: List<Title>) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(list.take(20), key = { it.id }) { x -> PosterCard(x, onClick = { Nav.push(Route.Detail(x)) }, width = 110.dp) }
+            }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (rel.isNotEmpty()) row("Связанное", rel)
+        if (sim.isNotEmpty()) row("Похожие", sim)
+        if (loaded && rel.isEmpty() && sim.isEmpty() && note.isNotEmpty()) {
+            Text("Похожие: сайт не вернул список ($note)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
