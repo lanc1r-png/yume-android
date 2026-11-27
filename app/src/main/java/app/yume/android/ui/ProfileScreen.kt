@@ -1,8 +1,13 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package app.yume.android.ui
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import app.yume.android.data.FolderStyles
+import app.yume.android.data.ProfileLook
+import app.yume.android.data.BookmarkFolder
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
@@ -174,10 +179,13 @@ fun ProfileScreen() {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.fillMaxWidth().height(110.dp).clip(RoundedCornerShape(20.dp))) {
-                    RemoteImage(user?.cover, Modifier.fillMaxSize())
+                    val hm = ProfileLook.activeHeader
+                    if (hm != null) ProfileMediaView(hm, Modifier.fillMaxSize()) else RemoteImage(user?.cover, Modifier.fillMaxSize())
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RemoteImage(user?.avatar, Modifier.size(64.dp).clip(CircleShape))
+                    val am = ProfileLook.activeAvatar
+                    if (am != null) ProfileMediaView(am, Modifier.size(64.dp).clip(CircleShape))
+                    else RemoteImage(user?.avatar, Modifier.size(64.dp).clip(CircleShape))
                     Column(Modifier.weight(1f)) {
                         Text(user?.username ?: "Профиль", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         val bits = ArrayList<String>()
@@ -208,18 +216,38 @@ fun ProfileScreen() {
                         }) { Text("Поделиться профилем") }
                     }
                 }
-                OutlinedButton(onClick = { Nav.push(Route.Friends()) }, modifier = Modifier.fillMaxWidth()) { Text("Друзья") }
+                var lookSheet by remember { mutableStateOf(false) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { Nav.push(Route.Friends()) }, modifier = Modifier.weight(1f)) { Text("Друзья") }
+                    OutlinedButton(onClick = { lookSheet = true }, modifier = Modifier.weight(1f)) { Text("Оформление") }
+                }
+                if (lookSheet) ProfileAppearanceSheet(onClose = { lookSheet = false })
+                var styleFolder by remember { mutableStateOf<BookmarkFolder?>(null) }
+                styleFolder?.let { FolderStyleSheet(it, onClose = { styleFolder = null }) }
                 ProfileShowcase(total)
                 Text("Мои списки · ${site.title}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (f in model.folders) {
-                        FilterChip(
-                            selected = model.selected == f.id,
-                            onClick = { scope.launch { model.select(f.id) } },
-                            label = { Text(f.name + (f.count?.let { " $it" } ?: "")) },
-                        )
+                        val st = FolderStyles.style(f.id)
+                        val base = st?.hex?.let { parseHex(it) }
+                        val sel = model.selected == f.id
+                        Box(
+                            Modifier.clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    when {
+                                        base != null -> base.copy(alpha = if (sel) 0.9f else 0.35f)
+                                        sel -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                        else -> MaterialTheme.colorScheme.surfaceContainer
+                                    },
+                                )
+                                .combinedClickable(onClick = { scope.launch { model.select(f.id) } }, onLongClick = { styleFolder = f })
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            Text((st?.emoji?.let { "$it " } ?: "") + f.name + (f.count?.let { " $it" } ?: ""), style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
+                Text("Долгое нажатие на список — цвет и эмодзи", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 model.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 AuthStore.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
