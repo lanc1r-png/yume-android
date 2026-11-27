@@ -226,7 +226,12 @@ object OfflineStore {
             )
         }
         try {
-            File(dir, "manifest.json").writeText(arr.toString())
+            val tmp = File(dir, "manifest.json.tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(File(dir, "manifest.json"))) {
+                File(dir, "manifest.json").writeText(arr.toString())
+                tmp.delete()
+            }
         } catch (e: Exception) {
             // не критично
         }
@@ -352,6 +357,11 @@ object DownloadManager {
 
     fun init(ctx: Context) {
         appContext = ctx.applicationContext
+        // Если систему убила приложение посреди загрузки, «зависшее» уведомление убираем.
+        try {
+            (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(NOTE_ID)
+        } catch (e: Exception) {
+        }
     }
 
     fun enqueue(novel: Title, all: List<Chapter>, targets: List<Chapter>) {
@@ -477,7 +487,13 @@ object DownloadManager {
                 Api.httpClient.newCall(req).execute().use { r ->
                     val data = r.body?.bytes()
                     if (r.isSuccessful && data != null && data.isNotEmpty()) {
-                        file.writeBytes(data)
+                        // сначала во временный файл: обрыв посреди записи не оставит «готовую» обрезанную картинку
+                        val tmp = File(file.parentFile, file.name + ".tmp")
+                        tmp.writeBytes(data)
+                        if (!tmp.renameTo(file)) {
+                            file.writeBytes(data)
+                            tmp.delete()
+                        }
                         return@withContext data.size.toLong()
                     }
                 }

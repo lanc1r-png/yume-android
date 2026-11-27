@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,7 +56,7 @@ fun FloatingTabBar(
     val scheme = MaterialTheme.colorScheme
     val container = if (glass) scheme.surfaceContainerHigh.copy(alpha = 0.55f) else scheme.surfaceContainerHigh
     Surface(
-        modifier = modifier.fillMaxWidth().height(FloatingBarHeight),
+        modifier = modifier.widthIn(max = 480.dp).fillMaxWidth().height(FloatingBarHeight),
         shape = CircleShape,
         color = container,
         tonalElevation = if (glass) 0.dp else 3.dp,
