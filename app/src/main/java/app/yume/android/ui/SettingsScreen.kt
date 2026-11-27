@@ -49,7 +49,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.yume.android.Nav
 import app.yume.android.Prefs
+import app.yume.android.Route
+import app.yume.android.data.AuthStore
+import app.yume.android.data.RequestLog
+import androidx.compose.ui.platform.LocalView
 import app.yume.android.data.FavoritesStore
 import app.yume.android.data.OfflineStore
 import app.yume.android.data.ProgressStore
@@ -192,7 +197,7 @@ fun SettingsScreen() {
 
         SectionTitle("Акцентный цвет")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            val colors = listOf("A87AFF", "E91E63", "2196F3", "009688", "4CAF50", "FF9800", "F44336")
+            val colors = listOf("A87AFF", "E91E63", "2196F3", "009688", "4CAF50", "FACC15", "FF9800", "F44336", "64D2FF", "94A3B8")
             FilterChip(
                 selected = Prefs.accent == "dynamic",
                 onClick = { Prefs.selectAccent("dynamic") },
@@ -211,9 +216,15 @@ fun SettingsScreen() {
             }
         }
 
+        SectionTitle("Отклик")
+        val view = LocalView.current
+        SwitchRow("Вибрация при нажатиях", Prefs.haptics) { Prefs.updateHaptics(it); if (it) view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM) }
+        SwitchRow("Не гасить экран, пока читаешь или смотришь", Prefs.keepAwake) { Prefs.updateKeepAwake(it) }
+
         val site = Site.of(Prefs.platform)
         if (site.isManga) {
         SectionTitle("Чтение манги")
+        SwitchRow("Фон под страницу: по теме приложения", Prefs.mangaAutoBg) { Prefs.updateMangaAutoBg(it) }
         Text("Режим по умолчанию", style = MaterialTheme.typography.bodyMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for ((key, label) in listOf("auto" to "Авто", "pages" to "Страницы", "scroll" to "Лента")) {
@@ -270,6 +281,23 @@ fun SettingsScreen() {
                 "Скачано глав: ${OfflineStore.totalChapters()} · ${OfflineStore.sizeText()}",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Text("Лимит места", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (g in listOf(0, 1, 2, 3, 5, 10, 20, 50)) {
+                    FilterChip(selected = Prefs.offLimit == g, onClick = { Prefs.selectOffLimit(g) }, label = { Text(if (g == 0) "Без лимита" else "$g ГБ") })
+                }
+            }
+            if (Prefs.offLimit > 0) {
+                Text("При превышении", style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = Prefs.offOverflow == "refuse", onClick = { Prefs.selectOffOverflow("refuse") }, label = { Text("Отказаться") })
+                    FilterChip(selected = Prefs.offOverflow == "purge", onClick = { Prefs.selectOffOverflow("purge") }, label = { Text("Удалять прочитанное") })
+                }
+                Text(
+                    "Занято ${OfflineStore.sizeText()} из ${Prefs.offLimit} ГБ. «Отказаться» — загрузка встанет на лимите, «Удалять прочитанное» — освободит место старыми прочитанными главами.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             SwitchRow("Скачивать только по Wi‑Fi", Prefs.offWifi) { Prefs.updateOffWifi(it) }
             SwitchRow("Докачивать 3 следующие главы при чтении", Prefs.offPrefetch) { Prefs.updateOffPrefetch(it) }
             if (OfflineStore.totalChapters() > 0) {
@@ -287,11 +315,6 @@ fun SettingsScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Не гасить экран при чтении", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Switch(checked = Prefs.keepAwake, onCheckedChange = { Prefs.updateKeepAwake(it) })
-        }
-
         SectionTitle("Резервная копия")
         Text(
             "Избранное, история, прогресс и настройки. Формат совместим с iOS-версией. Токен входа в копию не попадает.",
@@ -320,13 +343,74 @@ fun SettingsScreen() {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { exportFile.launch(Backup.FILE_NAME) }) { Text("Сохранить в файл") }
             OutlinedButton(onClick = { importFile.launch(arrayOf("*/*")) }) { Text("Загрузить из файла") }
+            OutlinedButton(onClick = {
+                try {
+                    val dir = java.io.File(ctx.cacheDir, "share").also { it.mkdirs() }
+                    val f = java.io.File(dir, Backup.FILE_NAME)
+                    f.writeBytes(Backup.toPlist())
+                    val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
+                    val i = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/octet-stream"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    ctx.startActivity(Intent.createChooser(i, "Отправить копию"))
+                    Prefs.markBackupSent()
+                } catch (e: Exception) {
+                    toast("Не удалось подготовить файл: ${e.message}")
+                }
+            }) { Text("Отправить копию") }
+        }
+        val sentDays = if (Prefs.backupSent == 0L) null else ((System.currentTimeMillis() - Prefs.backupSent) / 86_400_000L).toInt()
+        if (sentDays == null || sentDays >= 7) {
+            Text(
+                (if (sentDays == null) "Копия ещё не отправлялась." else "Копия не отправлялась $sentDays дн.") + " Отправьте файл в Telegram или сохраните: при переустановке данные не пропадут.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+            )
         }
 
-        SectionTitle("Данные")
+        SectionTitle("Кэш картинок")
+        val loader = coil3.SingletonImageLoader.get(ctx)
+        var cacheTick by remember { mutableIntStateOf(0) }
+        val cacheBytes = if (cacheTick >= 0) (loader.diskCache?.size ?: 0L) else 0L
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Обложки и просмотренные страницы: ${"%.1f".format(cacheBytes / 1048576.0)} МБ", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = {
+                loader.diskCache?.clear()
+                loader.memoryCache?.clear()
+                cacheTick++
+                toast("Кэш картинок очищен. Скачанные главы на месте.")
+            }, enabled = cacheBytes > 0) { Text("Очистить") }
+        }
+
+        SectionTitle("Профиль")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { Nav.push(Route.Stats()) }) { Text("Моя активность") }
+            OutlinedButton(onClick = { Nav.push(Route.Friends()) }) { Text("Друзья") }
+        }
+        Text("Шапка и аватарка меняются во вкладке «Профиль» → «Оформление».", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        SectionTitle("Для разработчика")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { Nav.push(Route.SiteLog()) }) { Text("Журнал запросов сайта (${RequestLog.items.size})") }
+            OutlinedButton(onClick = { Nav.push(Route.AnySite()) }) { Text("Любой сайт") }
+        }
+
+        SectionTitle("Сброс")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { confirm = "history" }) { Text("Очистить историю") }
             OutlinedButton(onClick = { confirm = "read" }) { Text(if (site.isAnime) "Сбросить прогресс просмотра" else "Сбросить «прочитано»") }
             OutlinedButton(onClick = { confirm = "fav" }) { Text("Очистить избранное") }
+        }
+
+        AuthStore.user?.let { u ->
+            OutlinedButton(onClick = { confirm = "signout" }, modifier = Modifier.fillMaxWidth()) {
+                Text("Выйти из аккаунта ${u.username}", color = MaterialTheme.colorScheme.error)
+            }
+        } ?: Text("Вход — во вкладке «Профиль».", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Yume ${ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text("Данные: ${Site.of(Prefs.platform).origin.removePrefix("https://")} · неофициальное приложение", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -339,6 +423,7 @@ fun SettingsScreen() {
                         "history" -> "Очистить историю?"
                         "offline" -> "Удалить все скачанные главы?"
                         "fav" -> "Очистить избранное?"
+                        "signout" -> "Выйти из аккаунта?"
                         else -> "Сбросить отметки?"
                     },
                 )
@@ -350,6 +435,7 @@ fun SettingsScreen() {
                         "history" -> HistoryStore.clear()
                         "offline" -> OfflineStore.removeAll()
                         "fav" -> FavoritesStore.clear()
+                        "signout" -> AuthStore.signOut()
                         else -> {
                             ReadStore.clear()
                             ProgressStore.clear()

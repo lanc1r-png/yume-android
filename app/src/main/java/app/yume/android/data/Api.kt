@@ -175,10 +175,18 @@ object Api {
         } else {
             rb.method(method, (json?.toString() ?: "").toRequestBody("application/json".toMediaType()))
         }
-        client.newCall(rb.build()).execute().use { resp ->
-            val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) throw ApiException(resp.code, body.take(300))
-            body
+        val started = System.currentTimeMillis()
+        val reqUrl = builder.build().toString().removePrefix(BASE)
+        try {
+            client.newCall(rb.build()).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                RequestLog.add(method, reqUrl, resp.code, System.currentTimeMillis() - started, if (resp.isSuccessful) "" else body.take(160).replace("\n", " "))
+                if (!resp.isSuccessful) throw ApiException(resp.code, body.take(300))
+                body
+            }
+        } catch (e: java.io.IOException) {
+            RequestLog.add(method, reqUrl, 0, System.currentTimeMillis() - started, e.message ?: "сбой сети")
+            throw e
         }
     }
 

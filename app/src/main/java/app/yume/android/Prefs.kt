@@ -24,6 +24,11 @@ object Prefs {
     const val KEY_NOVEL_ANIM = "novel.anim"
     const val KEY_OFF_WIFI = "off.wifi"
     const val KEY_OFF_PREFETCH = "off.prefetch"
+    const val KEY_HAPTICS = "set.haptics"
+    const val KEY_MANGA_BG = "manga.autoBG"
+    const val KEY_OFF_LIMIT = "off.limitGB"
+    const val KEY_OFF_OVERFLOW = "off.overflow"
+    const val KEY_BACKUP_SENT = "backup.sent"
 
     val ACTIVE_PLATFORMS = setOf("anime", "ranobe", "manga")
 
@@ -75,6 +80,23 @@ object Prefs {
     var offPrefetch by mutableStateOf(false)
         private set
 
+    var haptics by mutableStateOf(true)
+        private set
+
+    var mangaAutoBg by mutableStateOf(true)
+        private set
+
+    /** Лимит места под загрузки, ГБ (0 — без лимита). */
+    var offLimit by mutableStateOf(0)
+        private set
+
+    /** При превышении лимита: «refuse» или «purge». */
+    var offOverflow by mutableStateOf("refuse")
+        private set
+
+    var backupSent by mutableStateOf(0L)
+        private set
+
     /** Читает все значения из хранилища (после запуска и после восстановления копии). */
     fun reload() {
         val saved = KV.getString(KEY_PLATFORM, "anime") ?: "anime"
@@ -84,6 +106,11 @@ object Prefs {
         mangaAnim = KV.getString(KEY_ANIM, "slide") ?: "slide"
         accent = KV.getString(KEY_ACCENT, "dynamic") ?: "dynamic"
         tapZones = KV.getBool(KEY_TAPZONES, true)
+        haptics = KV.getBool(KEY_HAPTICS, true)
+        mangaAutoBg = KV.getBool(KEY_MANGA_BG, true)
+        offLimit = KV.getString(KEY_OFF_LIMIT, "0")?.toIntOrNull() ?: 0
+        offOverflow = KV.getString(KEY_OFF_OVERFLOW, "refuse") ?: "refuse"
+        backupSent = KV.getString(KEY_BACKUP_SENT, "0")?.toLongOrNull() ?: 0L
         keepAwake = KV.getBool(KEY_AWAKE, true)
         resume = KV.getBool(KEY_RESUME, true)
         autoNext = KV.getBool(KEY_AUTONEXT, true)
@@ -101,6 +128,11 @@ object Prefs {
     fun selectNovelAnim(v: String) { novelAnim = v; KV.putString(KEY_NOVEL_ANIM, v) }
     fun updateOffWifi(v: Boolean) { offWifi = v; KV.putBool(KEY_OFF_WIFI, v) }
     fun updateOffPrefetch(v: Boolean) { offPrefetch = v; KV.putBool(KEY_OFF_PREFETCH, v) }
+    fun updateHaptics(v: Boolean) { haptics = v; KV.putBool(KEY_HAPTICS, v) }
+    fun updateMangaAutoBg(v: Boolean) { mangaAutoBg = v; KV.putBool(KEY_MANGA_BG, v) }
+    fun selectOffLimit(v: Int) { offLimit = v; KV.putString(KEY_OFF_LIMIT, v.toString()) }
+    fun selectOffOverflow(v: String) { offOverflow = v; KV.putString(KEY_OFF_OVERFLOW, v) }
+    fun markBackupSent() { backupSent = System.currentTimeMillis(); KV.putString(KEY_BACKUP_SENT, backupSent.toString()) }
 
     fun selectPlatform(value: String) {
         if (value !in ACTIVE_PLATFORMS) return

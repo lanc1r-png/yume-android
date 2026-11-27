@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -229,7 +230,8 @@ fun ReaderScreen(route: Route.Reader, onClose: () -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    val readerBg = if (Prefs.mangaAutoBg && MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.White else Color.Black
+    Box(Modifier.fillMaxSize().background(readerBg)) {
         if (pages.isNotEmpty()) {
             key(index, vertical, Prefs.mangaAnim) {
                 if (vertical) {

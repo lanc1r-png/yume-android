@@ -246,6 +246,20 @@ object OfflineStore {
 
     fun totalChapters(): Int = entries.values.sumOf { it.files.size }
 
+    fun totalBytes(): Long = entries.values.sumOf { it.bytes }
+
+    /** Удаляет самые старые уже прочитанные главы, пока не уложимся в лимит. Возвращает, получилось ли. */
+    fun purgeRead(limitBytes: Long): Boolean {
+        for (e in entries.values.sortedBy { it.updated }) {
+            val read = ReadStore.read[(if (Site.current.isManga) -e.novel.id else e.novel.id).toString()].orEmpty().toSet()
+            for (cid in e.files.keys.toList()) {
+                if (totalBytes() <= limitBytes) return true
+                if (cid in read) remove(e.novel.id, cid)
+            }
+        }
+        return totalBytes() <= limitBytes
+    }
+
     fun sizeText(): String {
         val b = entries.values.sumOf { it.bytes }.toDouble()
         return when {
@@ -376,6 +390,13 @@ object DownloadManager {
             }
             status = job.chapter.title
             try {
+                if (Prefs.offLimit > 0) {
+                    val limit = Prefs.offLimit * 1024L * 1024L * 1024L
+                    if (OfflineStore.totalBytes() >= limit) {
+                        val ok = Prefs.offOverflow == "purge" && withContext(Dispatchers.Main) { OfflineStore.purgeRead(limit - 50L * 1024 * 1024) }
+                        if (!ok) throw ApiException(0, "Достигнут лимит места (${Prefs.offLimit} ГБ)")
+                    }
+                }
                 download(job)
             } catch (e: CancellationException) {
                 throw e
