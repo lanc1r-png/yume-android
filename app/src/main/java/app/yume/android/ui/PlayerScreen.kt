@@ -49,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import app.yume.android.data.KV
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -122,6 +124,8 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
     var attempts by remember { mutableStateOf<List<Pair<String, Map<String, String>>>>(emptyList()) }
     var attemptIndex by remember { mutableIntStateOf(0) }
     var subtitle by remember { mutableStateOf<String?>(null) }
+    var speed by remember { mutableFloatStateOf(KV.getFloat("player.speed", 1f)) }
+    LaunchedEffect(player) { player?.setPlaybackSpeed(speed) }
     var startAt by remember { mutableStateOf(0.0) }
 
     val episode = episodes.getOrNull(index)
@@ -393,7 +397,11 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
         }
     }
 
-    if (fullscreen) {
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        app.yume.android.Pip.enabled = true
+        onDispose { app.yume.android.Pip.enabled = false }
+    }
+    if (fullscreen || app.yume.android.Pip.inPip) {
         Video(Modifier.fillMaxSize())
         return
     }
@@ -405,6 +413,7 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
                 Text(title.displayTitle, maxLines = 1, style = MaterialTheme.typography.titleSmall)
                 Text(episode?.title ?: "", maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            TextButton(onClick = { app.yume.android.Pip.enter(ctx.findActivity()) }) { Text("В окошке") }
         }
         Video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
 
@@ -454,6 +463,16 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
                 }
             }
 
+            Text("Скорость", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (sp in listOf(0.75f, 1f, 1.25f, 1.5f, 2f)) {
+                    androidx.compose.material3.FilterChip(
+                        selected = speed == sp,
+                        onClick = { speed = sp; KV.putFloat("player.speed", sp); player?.setPlaybackSpeed(sp) },
+                        label = { Text(if (sp == 1f) "1×" else "${sp}×") },
+                    )
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = { if (index > 0) index-- }, enabled = index > 0, modifier = Modifier.weight(1f)) { Text("Предыдущая") }
                 OutlinedButton(onClick = { if (index + 1 < episodes.size) index++ }, enabled = index + 1 < episodes.size, modifier = Modifier.weight(1f)) { Text("Следующая") }

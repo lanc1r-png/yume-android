@@ -13,6 +13,16 @@ class MainActivity : ComponentActivity() {
         setContent { YumeApp() }
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Pip.enabled) Pip.enter(this)
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        Pip.inPip = isInPictureInPictureMode
+    }
+
     override fun onStop() {
         super.onStop()
         // как в iOS: копия обновляется при сворачивании приложения
