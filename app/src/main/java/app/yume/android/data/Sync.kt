@@ -19,7 +19,9 @@ enum class ListStatus(val key: String, val color: Long) {
     DONE("done", 0xFF599EFF),
     DROPPED("dropped", 0xFFFF667A);
 
-    fun title(book: Boolean): String = when (this) {
+    fun title(book: Boolean): String = FavNames.get(this, book) ?: defaultTitle(book)
+
+    fun defaultTitle(book: Boolean): String = when (this) {
         ACTIVE -> if (book) "Читаю" else "Смотрю"
         PLANNED -> "В планах"
         DONE -> if (book) "Прочитано" else "Просмотрено"
@@ -103,6 +105,65 @@ object FavMetaStore {
     }
 
     fun count(t: Title): Int? = map[key(t)]?.count
+
+    fun meta(t: Title): FavMeta? {
+        @Suppress("UNUSED_VARIABLE") val v = version
+        return map[key(t)]
+    }
+
+    private fun now01() = System.currentTimeMillis() / 1000.0 - 978307200.0
+
+    /** Когда тайтл обновлялся: дата выхода, иначе момент, когда мы заметили новые серии (секунды от 2001). */
+    fun updateDate(t: Title): Double? = meta(t)?.let { it.release ?: it.changed }
+
+    /** Сколько серий или глав вышло с тех пор, как ты в последний раз заглядывал в тайтл. */
+    fun newCount(t: Title): Int {
+        val m = meta(t) ?: return 0
+        val c = m.count ?: return 0
+        val s = m.seen ?: return 0
+        return maxOf(0, c - s)
+    }
+
+    fun totalNew(list: List<Title>): Int = list.count { newCount(it) > 0 }
+
+    fun markSeen(t: Title) {
+        val m = map[key(t)] ?: return
+        val c = m.count ?: return
+        if (m.seen == c) return
+        map[key(t)] = m.copy(seen = c)
+        save()
+    }
+
+    fun markAllSeen(list: List<Title>) {
+        for (t in list) {
+            val m = map[key(t)] ?: continue
+            val c = m.count ?: continue
+            map[key(t)] = m.copy(seen = c)
+        }
+        KV.putString("new.lastVisit", System.currentTimeMillis().toString())
+        save()
+    }
+
+    fun needsCheck(t: Title): Boolean {
+        val c = meta(t)?.checked ?: return true
+        return now01() - c > 1800
+    }
+
+    /** Применяет пачку результатов проверки: одна запись на диск вместо десятков. */
+    fun applyBatch(results: List<Triple<Title, Int?, Long?>>) {
+        if (results.isEmpty()) return
+        for ((t, count, releaseMs) in results) {
+            var m = map[key(t)] ?: FavMeta()
+            if (m.seen == null && count != null) m = m.copy(seen = m.count ?: count)
+            val old = m.count
+            if (old != null && count != null && count > old) m = m.copy(changed = now01())
+            if (count != null) m = m.copy(count = count)
+            if (releaseMs != null) m = m.copy(release = releaseMs / 1000.0 - 978307200.0)
+            m = m.copy(checked = now01())
+            map[key(t)] = m
+        }
+        save()
+    }
 
     fun setStatus(t: Title, s: ListStatus?) {
         map[key(t)] = (map[key(t)] ?: FavMeta()).copy(status = s?.key)

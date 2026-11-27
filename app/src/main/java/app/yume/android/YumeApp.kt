@@ -57,6 +57,7 @@ sealed class Route {
     class Novel(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
     class Login : Route()
     class Friends : Route()
+    class NewInFavorites : Route()
     class SiteLog : Route()
     class AnySite : Route()
     class Stats : Route()
@@ -101,6 +102,7 @@ private enum class YumeTab(val title: String, val icon: ImageVector) {
 
 @Composable
 fun YumeApp() {
+    androidx.compose.runtime.LaunchedEffect(Prefs.platform) { app.yume.android.data.FavUpdater.refreshIfDue() }
     androidx.compose.runtime.LaunchedEffect(app.yume.android.data.AuthStore.user?.id) {
         if (app.yume.android.data.AuthStore.user != null) app.yume.android.data.SiteListSync.syncAll()
     }
@@ -123,6 +125,7 @@ fun YumeApp() {
                             is Route.SiteLog -> app.yume.android.ui.SiteLogScreen(onClose = { Nav.pop() })
                             is Route.AnySite -> app.yume.android.ui.AnySiteScreen(onClose = { Nav.pop() })
                             is Route.Stats -> app.yume.android.ui.StatsScreen(onClose = { Nav.pop() })
+                            is Route.NewInFavorites -> app.yume.android.ui.NewInFavoritesScreen(onClose = { Nav.pop() })
                             is Route.Friends -> app.yume.android.ui.FriendsScreen(onClose = { Nav.pop() })
                             is Route.FriendProfile -> app.yume.android.ui.FriendProfileScreen(route, onClose = { Nav.pop() })
                             is Route.Login -> app.yume.android.ui.LoginScreen(onClose = { Nav.pop() })

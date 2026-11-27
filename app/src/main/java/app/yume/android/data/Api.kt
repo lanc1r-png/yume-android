@@ -337,6 +337,17 @@ object Api {
 
     // ---- Тайтл ----
 
+    /** Число серий или глав и дата последнего выхода (поля ищем по смыслу имени). */
+    suspend fun updateInfo(slug: String?): Pair<Int?, Long?> {
+        if (slug.isNullOrEmpty()) return null to null
+        val root = try {
+            J.parse(raw(Site.current.apiPath + "/" + slug))
+        } catch (e: Exception) {
+            null
+        } ?: return null to null
+        return FavUpdate.parse(root)
+    }
+
     suspend fun details(slug: String): Title {
         val base = listOf("summary", "genres", "authors", "otherNames")
         fun q(fields: List<String>) = fields.map { "fields[]" to it }
