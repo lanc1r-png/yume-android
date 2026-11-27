@@ -220,6 +220,7 @@ fun SettingsScreen() {
         val view = LocalView.current
         SwitchRow("Вибрация при нажатиях", Prefs.haptics) { Prefs.updateHaptics(it); if (it) view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM) }
         SwitchRow("Не гасить экран, пока читаешь или смотришь", Prefs.keepAwake) { Prefs.updateKeepAwake(it) }
+        SwitchRow("Стеклянная нижняя панель (размытие, Android 12+)", Prefs.glass) { Prefs.updateGlass(it) }
 
         val site = Site.of(Prefs.platform)
         if (site.isManga) {

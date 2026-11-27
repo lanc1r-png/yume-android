@@ -27,6 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import app.yume.android.data.Chapter
 import app.yume.android.data.EpisodeShort
 import app.yume.android.data.Sort
@@ -152,9 +155,13 @@ fun YumeApp() {
 private fun MainScaffold() {
     val tabs = YumeTab.entries
     val gap = 12.dp
+    val glass = Prefs.glass
+    val haze = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    // В режиме «стекло» контент заходит под панель, чтобы было что размывать.
+    val bottomReserve = if (glass) FloatingBarHeight + gap - 28.dp else FloatingBarHeight + gap + 4.dp
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            Box(Modifier.fillMaxSize().padding(bottom = FloatingBarHeight + gap + 4.dp)) {
+            Box(Modifier.fillMaxSize().padding(bottom = bottomReserve).then(if (glass) Modifier.haze(state = haze) else Modifier)) {
                 androidx.compose.animation.Crossfade(
                     targetState = Router.tab,
                     animationSpec = androidx.compose.animation.core.tween(180),
@@ -174,7 +181,17 @@ private fun MainScaffold() {
                 icons = tabs.map { it.icon },
                 selected = Router.tab,
                 onSelect = { Router.tab = it },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(start = 14.dp, end = 14.dp, bottom = gap),
+                glass = glass,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 14.dp, end = 14.dp, bottom = gap)
+                    .then(
+                        if (glass) Modifier.hazeChild(
+                            state = haze,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            style = HazeStyle(tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f), blurRadius = 24.dp),
+                        ) else Modifier,
+                    ),
             )
         }
     }
