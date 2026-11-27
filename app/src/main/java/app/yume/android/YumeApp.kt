@@ -43,6 +43,7 @@ import app.yume.android.ui.FavoritesScreen
 import app.yume.android.ui.HomeScreen
 import app.yume.android.ui.NovelReaderScreen
 import app.yume.android.ui.PlayerScreen
+import app.yume.android.ui.ProfileScreen
 import app.yume.android.ui.ReaderScreen
 import app.yume.android.ui.SettingsScreen
 
@@ -54,6 +55,7 @@ sealed class Route {
     class Reader(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
     class Player(val title: Title, val episodes: List<EpisodeShort>, val start: Int) : Route()
     class Novel(val title: Title, val chapters: List<Chapter>, val start: Int) : Route()
+    class Login : Route()
     class Author(val authorId: Int, val name: String, val slug: String?) : Route()
 }
 
@@ -110,6 +112,7 @@ fun YumeApp() {
                             is Route.Detail -> DetailScreen(route.title)
                             is Route.Reader -> ReaderScreen(route, onClose = { Nav.pop() })
                             is Route.Player -> PlayerScreen(route, onClose = { Nav.pop() })
+                            is Route.Login -> app.yume.android.ui.LoginScreen(onClose = { Nav.pop() })
                             is Route.Novel -> NovelReaderScreen(route, onClose = { Nav.pop() })
                             is Route.Author -> AuthorScreen(route)
                         }
@@ -153,22 +156,5 @@ private fun MainScaffold() {
                 YumeTab.Settings -> SettingsScreen()
             }
         }
-    }
-}
-
-@Composable
-private fun ProfileScreen() {
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("Профиль", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "Вход в аккаунт, закладки сайта и комментарии появятся позже.",
-            modifier = Modifier.padding(top = 8.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

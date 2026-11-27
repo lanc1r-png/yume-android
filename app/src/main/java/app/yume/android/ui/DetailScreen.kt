@@ -54,7 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.yume.android.Nav
+import kotlinx.coroutines.launch
 import app.yume.android.Prefs
+import app.yume.android.data.AuthStore
 import app.yume.android.data.EpisodeShort
 import app.yume.android.data.HistoryStore
 import app.yume.android.data.ProgressStore
@@ -81,6 +83,7 @@ fun DetailScreen(initial: Title) {
     var reversed by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showBookmark by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(initial.id, tick) {
@@ -295,6 +298,21 @@ fun DetailScreen(initial: Title) {
                 }
             }
 
+            if (AuthStore.token != null) {
+                item {
+                    Surface(
+                        onClick = { showBookmark = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                    ) {
+                        Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Добавить в список на сайте", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text("›", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+            }
+
             item {
                 Surface(
                     onClick = { showComments = true },
@@ -359,6 +377,7 @@ fun DetailScreen(initial: Title) {
         }
     }
 
+    if (showBookmark) BookmarkSheet(t) { showBookmark = false }
     if (showComments) {
         CommentsSheet(
             title = "Комментарии",
@@ -441,6 +460,63 @@ private fun EpisodeRow(e: EpisodeShort, onClick: () -> Unit) {
                 status?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             if (p?.finished == true) Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun BookmarkSheet(t: Title, onDismiss: () -> Unit) {
+    var folders by remember { mutableStateOf<List<app.yume.android.data.BookmarkFolder>>(emptyList()) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var done by remember { mutableStateOf<Int?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        try {
+            folders = AuthStore.folders()
+        } catch (e: Exception) {
+            message = e.message
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("В список", style = MaterialTheme.typography.titleLarge)
+            for (f in folders) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            val err = AuthStore.addToFolder(t, f.id)
+                            if (err == null) {
+                                done = f.id
+                                message = null
+                            } else {
+                                message = err
+                            }
+                            busy = false
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text((if (done == f.id) "✓ " else "") + f.name) }
+            }
+            if (folders.isNotEmpty()) {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            val err = AuthStore.removeFromFolders(t)
+                            message = err ?: "Убрано из списков"
+                            if (err == null) done = null
+                            busy = false
+                        }
+                    },
+                    enabled = !busy,
+                ) { Text("Убрать из списков") }
+            }
+            message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

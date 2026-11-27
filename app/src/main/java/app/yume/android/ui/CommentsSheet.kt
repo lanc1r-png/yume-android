@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.yume.android.data.Api
+import app.yume.android.data.AuthStore
 import app.yume.android.data.CommentItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -58,6 +59,14 @@ class CommentsModel(private val postId: Int, private val postType: String) {
     private var page = 1
     var finished by mutableStateOf(false)
         private set
+
+    suspend fun reloadFirst() {
+        items.clear()
+        replies.clear()
+        page = 1
+        finished = false
+        loadMore()
+    }
 
     fun sorted(): List<CommentItem> = when (sort) {
         CommentSort.NEW -> items.sortedWith(compareByDescending<CommentItem> { it.created }.thenByDescending { it.id })
@@ -142,12 +151,47 @@ fun CommentsSheet(title: String, postId: Int, postType: String, onDismiss: () ->
                     )
                 }
             }
-            Text(
-                "Писать комментарии можно будет после входа в аккаунт (скоро).",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            var draft by remember { mutableStateOf("") }
+            var sendError by remember { mutableStateOf<String?>(null) }
+            var sending by remember { mutableStateOf(false) }
+            if (AuthStore.token == null) {
+                Text(
+                    "Чтобы писать комментарии, войдите во вкладке «Профиль».",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Ваш комментарий") },
+                        maxLines = 4,
+                    )
+                    TextButton(
+                        enabled = draft.isNotBlank() && !sending,
+                        onClick = {
+                            scope.launch {
+                                sending = true
+                                val err = AuthStore.sendComment(draft.trim(), postId, postType, null)
+                                sending = false
+                                if (err == null) {
+                                    draft = ""
+                                    sendError = null
+                                    model.reloadFirst()
+                                } else {
+                                    sendError = err
+                                }
+                            }
+                        },
+                    ) { Text("Отправить") }
+                }
+                sendError?.let {
+                    Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().height(520.dp),
@@ -192,7 +236,12 @@ private fun CommentRow(c: CommentItem, model: CommentsModel, depth: Int) {
                     }
                     Text(c.text, style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("👍 ${c.up}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        var liked by remember { mutableStateOf(false) }
+                        TextButton(onClick = {
+                            scope.launch {
+                                if (AuthStore.like(c.id) == null) liked = true
+                            }
+                        }) { Text("👍 ${c.up + if (liked) 1 else 0}") }
                         if (c.down > 0) {
                             Text("👎 ${c.down}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
