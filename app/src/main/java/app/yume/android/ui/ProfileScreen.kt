@@ -4,10 +4,10 @@ package app.yume.android.ui
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import app.yume.android.data.FolderStyles
 import app.yume.android.data.ProfileLook
-import app.yume.android.data.BookmarkFolder
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
