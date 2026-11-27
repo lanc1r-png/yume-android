@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.automirrored.filled.List
@@ -270,6 +271,7 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
     var paginating by remember { mutableStateOf(false) }
     var pagesFor by remember { mutableIntStateOf(-1) }
     var showChapters by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(pageCount = { pages.size + 1 })
     val colors = colorsFor(theme, systemDark)
@@ -498,6 +500,7 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    IconButton(onClick = { showComments = true }) { Icon(Icons.Filled.Create, "Комментарии к главе") }
                 }
             }
         }
@@ -528,6 +531,12 @@ fun NovelReaderScreen(route: Route.Novel, onClose: () -> Unit) {
                     IconButton(onClick = { index++ }, enabled = index < chapters.size - 1) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Следующая глава") }
                 }
             }
+        }
+    }
+
+    if (showComments) {
+        chapters.getOrNull(index)?.let { cur ->
+            CommentsSheet(title = "Комментарии к главе ${cur.number}", postId = cur.id, postType = "chapter", onDismiss = { showComments = false })
         }
     }
 

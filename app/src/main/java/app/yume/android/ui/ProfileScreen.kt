@@ -190,6 +190,24 @@ fun ProfileScreen() {
                     }
                     OutlinedButton(onClick = { AuthStore.signOut() }) { Text("Выйти") }
                 }
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val total = model.folders.sumOf { it.count ?: 0 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (total > 0) {
+                        Text("Библиотека: $total тайтлов", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                    } else {
+                        Box(Modifier.weight(1f))
+                    }
+                    user?.let { u ->
+                        OutlinedButton(onClick = {
+                            val i = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, "${u.username}: https://animelib.org/ru/user/${u.id}")
+                            }
+                            ctx.startActivity(android.content.Intent.createChooser(i, "Поделиться профилем"))
+                        }) { Text("Поделиться профилем") }
+                    }
+                }
                 Text("Мои списки · ${site.title}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (f in model.folders) {

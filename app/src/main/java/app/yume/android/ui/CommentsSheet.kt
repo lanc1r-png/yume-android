@@ -54,6 +54,7 @@ class CommentsModel(private val postId: Int, private val postType: String) {
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var sort by mutableStateOf(CommentSort.NEW)
+    var replyTo by mutableStateOf<CommentItem?>(null)
     val replies = mutableStateMapOf<Int, List<CommentItem>>()
     val loadingReplies = mutableStateListOf<Int>()
     private var page = 1
@@ -162,6 +163,12 @@ fun CommentsSheet(title: String, postId: Int, postType: String, onDismiss: () ->
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                model.replyTo?.let { r ->
+                    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Ответ для ${r.username}", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        TextButton(onClick = { model.replyTo = null }) { Text("Отмена") }
+                    }
+                }
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.OutlinedTextField(
                         value = draft,
@@ -175,11 +182,12 @@ fun CommentsSheet(title: String, postId: Int, postType: String, onDismiss: () ->
                         onClick = {
                             scope.launch {
                                 sending = true
-                                val err = AuthStore.sendComment(draft.trim(), postId, postType, null)
+                                val err = AuthStore.sendComment(draft.trim(), postId, postType, model.replyTo?.id)
                                 sending = false
                                 if (err == null) {
                                     draft = ""
                                     sendError = null
+                                    model.replyTo = null
                                     model.reloadFirst()
                                 } else {
                                     sendError = err
@@ -244,6 +252,9 @@ private fun CommentRow(c: CommentItem, model: CommentsModel, depth: Int) {
                         }) { Text("👍 ${c.up + if (liked) 1 else 0}") }
                         if (c.down > 0) {
                             Text("👎 ${c.down}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (AuthStore.token != null) {
+                            TextButton(onClick = { model.replyTo = c }) { Text("Ответить") }
                         }
                         if (c.replyCount > 0) {
                             TextButton(onClick = {
