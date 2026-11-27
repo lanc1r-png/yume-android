@@ -209,6 +209,7 @@ fun ProfileScreen() {
                     }
                 }
                 OutlinedButton(onClick = { Nav.push(Route.Friends()) }, modifier = Modifier.fillMaxWidth()) { Text("Друзья") }
+                ProfileShowcase(total)
                 Text("Мои списки · ${site.title}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (f in model.folders) {

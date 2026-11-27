@@ -211,8 +211,15 @@ object HistoryStore {
         manga.load()
     }
 
-    fun recordChapter(title: Title, chapterId: Int, chapterTitle: String) = current.record(title, chapterId, chapterTitle)
-    fun recordEpisode(title: Title, ep: EpisodeShort) = current.record(title, ep.id, ep.title)
+    fun recordChapter(title: Title, chapterId: Int, chapterTitle: String) {
+        current.record(title, chapterId, chapterTitle)
+        ActivityStore.record(if (Site.current.isManga) "manga" else "novels", chapterId)
+    }
+
+    fun recordEpisode(title: Title, ep: EpisodeShort) {
+        current.record(title, ep.id, ep.title)
+        ActivityStore.record("episodes", ep.id)
+    }
     fun remove(titleId: Int) = current.remove(titleId)
     fun clear() = current.clear()
 }

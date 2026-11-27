@@ -102,6 +102,8 @@ object FavMetaStore {
         return ListStatus.of(map[key(t)]?.status)
     }
 
+    fun count(t: Title): Int? = map[key(t)]?.count
+
     fun setStatus(t: Title, s: ListStatus?) {
         map[key(t)] = (map[key(t)] ?: FavMeta()).copy(status = s?.key)
         save()
@@ -123,6 +125,8 @@ object FavMetaStore {
 
 /** Свои папки на сайте («Любимые» и другие) и какие тайтлы в них лежат. */
 object SiteFolders {
+    fun favorite(site: Site = Site.current): Folder? = get(site).firstOrNull { it.name.contains("любим", ignoreCase = true) }
+
     data class Folder(val id: Int, val name: String, val ids: List<Int>)
 
     var version by mutableIntStateOf(0)
