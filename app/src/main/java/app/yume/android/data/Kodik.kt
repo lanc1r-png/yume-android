@@ -60,7 +60,9 @@ object Kodik {
         val html = fetch(client, ua, pageUrl, "https://animelib.org/")
         val params = HashMap<String, String>()
         for (k in listOf("d", "d_sign", "pd", "pd_sign", "ref", "ref_sign")) {
-            match("\\\\?[\"']" + k + "\\\\?[\"']\\s*:\\s*\\\\?[\"']([^\"'\\\\]*)", html)?.let { params[k] = it }
+            // значение может содержать экранированные слэши (https:\/\/site\/), их нельзя обрезать
+            match("\\\\?[\"']" + k + "\\\\?[\"']\\s*:\\s*\\\\?[\"']((?:[^\"'\\\\]|\\\\/)*)", html)
+                ?.let { params[k] = it.replace("\\/", "/") }
         }
         if (params["d_sign"] == null || params["pd_sign"] == null) throw KodikException("ответ Kodik: нет параметров плеера")
 
