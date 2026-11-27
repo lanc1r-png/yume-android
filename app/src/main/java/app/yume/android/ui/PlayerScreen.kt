@@ -216,11 +216,12 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
     }
 
     fun playNative(q: PlayableVariant) {
-        val sets = listOf(
-            Api.playbackHeaders,
-            mapOf("Referer" to "https://animelib.org/", "Origin" to "https://animelib.org"),
-            emptyMap(),
-        )
+        val sets = ArrayList<Map<String, String>>()
+        sets.add(Api.playbackHeaders)
+        sets.add(mapOf("Referer" to "https://animelib.org/", "Origin" to "https://animelib.org"))
+        // Если вошли в аккаунт, сервер видео может ждать токен.
+        Api.token?.let { sets.add(Api.playbackHeaders + ("Authorization" to "Bearer $it")) }
+        sets.add(emptyMap())
         val list = ArrayList<Pair<String, Map<String, String>>>()
         for (u in listOf(q.url) + q.alts) for (h in sets) list.add(u to h)
         attempts = list
