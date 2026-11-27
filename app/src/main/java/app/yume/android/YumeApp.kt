@@ -13,13 +13,9 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -31,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.yume.android.data.Chapter
 import app.yume.android.data.EpisodeShort
 import app.yume.android.data.Sort
@@ -40,6 +35,8 @@ import app.yume.android.ui.AuthorScreen
 import app.yume.android.ui.CatalogScreen
 import app.yume.android.ui.DetailScreen
 import app.yume.android.ui.FavoritesScreen
+import app.yume.android.ui.FloatingBarHeight
+import app.yume.android.ui.FloatingTabBar
 import app.yume.android.ui.HomeScreen
 import app.yume.android.ui.NovelReaderScreen
 import app.yume.android.ui.PlayerScreen
@@ -144,35 +141,25 @@ fun YumeApp() {
 @Composable
 private fun MainScaffold() {
     val tabs = YumeTab.entries
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                tabs.forEachIndexed { i, tab ->
-                    NavigationBarItem(
-                        selected = Router.tab == i,
-                        onClick = { Router.tab = i },
-                        icon = { Icon(tab.icon, contentDescription = tab.title) },
-                        label = {
-                            Text(
-                                tab.title,
-                                maxLines = 1,
-                                softWrap = false,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.sp),
-                            )
-                        },
-                    )
+    val gap = 12.dp
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            Box(Modifier.fillMaxSize().padding(bottom = FloatingBarHeight + gap + 4.dp)) {
+                when (tabs[Router.tab]) {
+                    YumeTab.Home -> HomeScreen()
+                    YumeTab.Catalog -> CatalogScreen()
+                    YumeTab.Favorites -> FavoritesScreen()
+                    YumeTab.Profile -> ProfileScreen()
+                    YumeTab.Settings -> SettingsScreen()
                 }
             }
-        },
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tabs[Router.tab]) {
-                YumeTab.Home -> HomeScreen()
-                YumeTab.Catalog -> CatalogScreen()
-                YumeTab.Favorites -> FavoritesScreen()
-                YumeTab.Profile -> ProfileScreen()
-                YumeTab.Settings -> SettingsScreen()
-            }
+            FloatingTabBar(
+                titles = tabs.map { it.title },
+                icons = tabs.map { it.icon },
+                selected = Router.tab,
+                onSelect = { Router.tab = it },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(start = 14.dp, end = 14.dp, bottom = gap),
+            )
         }
     }
 }
