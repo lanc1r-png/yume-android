@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -90,7 +91,7 @@ fun NewInFavoritesScreen(onClose: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         OneHeader("Новое", onClose)
         LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {

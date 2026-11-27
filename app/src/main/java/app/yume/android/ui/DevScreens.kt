@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,7 +77,7 @@ private fun TopBar(title: String, onClose: () -> Unit, actions: @Composable () -
 @Composable
 fun SiteLogScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         TopBar("Журнал запросов сайта", onClose) {
             TextButton(onClick = { copy(ctx, RequestLog.text()) }) { Text("Копировать") }
             TextButton(onClick = { RequestLog.items.clear() }) { Text("Очистить") }
@@ -108,7 +109,7 @@ fun AnySiteScreen(onClose: () -> Unit) {
     var go by remember { mutableStateOf("https://animelib.org/ru/") }
     var showLog by remember { mutableStateOf(false) }
     val log = remember { mutableStateListOf<String>() }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         TopBar("Любой сайт", onClose) {
             TextButton(onClick = { showLog = !showLog }) { Text(if (showLog) "Страница" else "Запросы ${log.size}") }
             TextButton(onClick = { copy(ctx, log.reversed().joinToString("\n")) }) { Text("Копировать") }

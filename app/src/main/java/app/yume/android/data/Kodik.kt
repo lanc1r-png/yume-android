@@ -15,16 +15,49 @@ object Kodik {
     const val UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/124.0.0.0 Mobile Safari/537.36"
 
+    /** UA из iOS-версии: на нём прямой плеер работает; пробуем его первым, потом Android. */
+    private const val UA_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
+        "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+    /** Куки живут в памяти на время одного запроса: страница плеера ставит их, /ftor может их ждать. */
+    private class MemoryJar : okhttp3.CookieJar {
+        private val store = HashMap<String, MutableList<okhttp3.Cookie>>()
+        @Synchronized
+        override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+            val list = store.getOrPut(url.host) { ArrayList() }
+            for (c in cookies) {
+                list.removeAll { it.name == c.name }
+                list.add(c)
+            }
+        }
+        @Synchronized
+        override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> = store[url.host]?.toList().orEmpty()
+    }
+
     private fun match(pattern: String, s: String): String? =
         Regex(pattern, RegexOption.DOT_MATCHES_ALL).find(s)?.groupValues?.getOrNull(1)
 
-    private suspend fun fetch(url: String, referer: String): String = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url(url).header("Referer", referer).header("User-Agent", UA).build()
-        Api.httpClient.newCall(req).execute().use { it.body?.string() ?: throw KodikException("не открылась страница плеера") }
-    }
+    private suspend fun fetch(client: okhttp3.OkHttpClient, ua: String, url: String, referer: String): String =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url(url).header("Referer", referer).header("User-Agent", ua).build()
+            client.newCall(req).execute().use { it.body?.string() ?: throw KodikException("не открылась страница плеера") }
+        }
 
     suspend fun resolve(pageUrl: String): List<Pair<Int, String>> {
-        val html = fetch(pageUrl, "https://animelib.org/")
+        var last: KodikException? = null
+        for (ua in listOf(UA_IOS, UA)) {
+            try {
+                return resolveOnce(pageUrl, ua)
+            } catch (e: KodikException) {
+                last = e
+            }
+        }
+        throw last ?: KodikException("не получилось")
+    }
+
+    private suspend fun resolveOnce(pageUrl: String, ua: String): List<Pair<Int, String>> {
+        val client = Api.httpClient.newBuilder().cookieJar(MemoryJar()).build()
+        val html = fetch(client, ua, pageUrl, "https://animelib.org/")
         val params = HashMap<String, String>()
         for (k in listOf("d", "d_sign", "pd", "pd_sign", "ref", "ref_sign")) {
             match("\\\\?[\"']" + k + "\\\\?[\"']\\s*:\\s*\\\\?[\"']([^\"'\\\\]*)", html)?.let { params[k] = it }
@@ -43,7 +76,7 @@ object Kodik {
         try {
             val script = match("<script[^>]+src=\"(/assets/js/app\\.player[^\"]+)\"", html)
             if (script != null) {
-                val js = fetch("https://$host$script", pageUrl)
+                val js = fetch(client, ua, "https://$host$script", pageUrl)
                 val b64 = match("url:\\s*atob\\(\\s*[\"']([^\"']+)[\"']\\s*\\)", js)
                 if (b64 != null) {
                     val p = String(Base64.decode(b64, Base64.DEFAULT))
@@ -66,15 +99,15 @@ object Kodik {
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Origin", "https://$host")
                 .header("Referer", pageUrl)
-                .header("User-Agent", UA)
+                .header("User-Agent", ua)
                 .build()
-            Api.httpClient.newCall(req).execute().use { it.body?.string().orEmpty() }
+            client.newCall(req).execute().use { "[" + it.code + "] " + it.body?.string().orEmpty() }
         }
         val links = try {
-            JSONObject(text).optJSONObject("links")
+            JSONObject(text.substringAfter("] ")).optJSONObject("links")
         } catch (e: Exception) {
             null
-        } ?: throw KodikException("ответ Kodik: " + text.take(140))
+        } ?: throw KodikException("ответ Kodik " + text.replace("\n", " ").take(100))
 
         val result = ArrayList<Pair<Int, String>>()
         val it = links.keys()

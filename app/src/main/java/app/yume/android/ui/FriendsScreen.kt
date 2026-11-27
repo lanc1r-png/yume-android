@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -92,7 +93,7 @@ fun FriendsScreen(onClose: () -> Unit) {
     }
 
     val list = FriendsModel.merged(FriendsModel.friends.toList(), LocalFriends.items.toList())
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         OneHeader("Друзья", onClose) {
             TextButton(onClick = { syncing = true }) { Text("Синхронизировать") }
         }
@@ -218,7 +219,7 @@ private fun FriendsSyncScreen(userId: Int, onClose: () -> Unit) {
             }
         }
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
             Column(Modifier.weight(1f)) {
