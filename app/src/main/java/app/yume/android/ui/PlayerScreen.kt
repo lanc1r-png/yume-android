@@ -413,7 +413,7 @@ fun PlayerScreen(route: Route.Player, onClose: () -> Unit) {
                 Text(title.displayTitle, maxLines = 1, style = MaterialTheme.typography.titleSmall)
                 Text(episode?.title ?: "", maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { app.yume.android.Pip.enter(ctx.findActivity()) }) { Text("В окошке") }
+            androidx.compose.material3.TextButton(onClick = { app.yume.android.Pip.enter(ctx.findActivity()) }) { Text("В окошке") }
         }
         Video(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
 
