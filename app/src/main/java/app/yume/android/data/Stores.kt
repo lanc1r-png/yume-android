@@ -135,7 +135,6 @@ object FavoritesStore {
             Site.ANIME -> anime
             Site.RANOBE -> novels
             Site.MANGA -> manga
-        Site.HENTAI -> hentai
             Site.HENTAI -> hentai
         }
 
@@ -145,6 +144,7 @@ object FavoritesStore {
         Site.ANIME -> anime
         Site.RANOBE -> novels
         Site.MANGA -> manga
+        Site.HENTAI -> hentai
     }
 
     fun load() {
