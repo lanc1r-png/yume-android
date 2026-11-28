@@ -207,6 +207,7 @@ private fun FriendsSyncScreen(userId: Int, onClose: () -> Unit) {
     val host = when (Site.current) {
         Site.RANOBE -> "https://ranobelib.me"
         Site.MANGA -> "https://mangalib.me"
+        Site.HENTAI -> "https://kz.hentailib.me"
         else -> "https://animelib.org"
     }
     LaunchedEffect(Unit) {

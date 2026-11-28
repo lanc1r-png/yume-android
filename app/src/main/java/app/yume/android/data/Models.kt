@@ -80,7 +80,11 @@ data class Title(
         get() = J.normalizeUrl(cover?.default ?: cover?.md ?: cover?.thumbnail)
 
     /** Ключ в хранилище прочитанного: у манги id отрицательный (у манги и ранобэ id тайтлов могут совпасть). */
-    val readKey: Int get() = if (Site.current.isManga) -id else id
+    val readKey: Int get() = when (Site.current) {
+        Site.MANGA -> -id
+        Site.HENTAI -> -(id + 500_000_000) // как в iOS
+        else -> id
+    }
 
     val siteUrl: String? get() = slugUrl?.let { Site.current.titleUrlBase + it }
 

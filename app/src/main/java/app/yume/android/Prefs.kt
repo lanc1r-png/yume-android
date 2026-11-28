@@ -36,7 +36,7 @@ object Prefs {
     const val KEY_OFF_OVERFLOW = "off.overflow"
     const val KEY_BACKUP_SENT = "backup.sent"
 
-    val ACTIVE_PLATFORMS = setOf("anime", "ranobe", "manga")
+    val ACTIVE_PLATFORMS = setOf("anime", "ranobe", "manga", "hentai")
 
     /** «anime», «ranobe» или «manga». */
     var platform by mutableStateOf("anime")

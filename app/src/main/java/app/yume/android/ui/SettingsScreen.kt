@@ -141,6 +141,7 @@ fun SettingsScreen() {
                 PlatformTile("anime", "Аниме"),
                 PlatformTile("ranobe", "Ранобэ"),
                 PlatformTile("manga", "Манга"),
+                PlatformTile("hentai", "Хентай"),
             )
             for (t in tiles) {
                 val enabled = t.key in Prefs.ACTIVE_PLATFORMS

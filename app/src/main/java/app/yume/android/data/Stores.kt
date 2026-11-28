@@ -128,12 +128,15 @@ object FavoritesStore {
     private val anime = TitleList("favorites.v1")
     private val novels = TitleList("favorites.novels.v1")
     private val manga = TitleList("favorites.manga.v1")
+    private val hentai = TitleList("favorites.hentai.v1")
 
     private val current: TitleList
         get() = when (Site.current) {
             Site.ANIME -> anime
             Site.RANOBE -> novels
             Site.MANGA -> manga
+        Site.HENTAI -> hentai
+            Site.HENTAI -> hentai
         }
 
     val items get() = current.items
@@ -148,6 +151,7 @@ object FavoritesStore {
         anime.load()
         novels.load()
         manga.load()
+        hentai.load()
     }
 
     fun contains(t: Title): Boolean = current.contains(t)
@@ -195,12 +199,14 @@ object HistoryStore {
     private val anime = HistoryList("history.v1")
     private val novels = HistoryList("history.novels.v1")
     private val manga = HistoryList("history.manga.v1")
+    private val hentai = HistoryList("history.hentai.v1")
 
     private val current: HistoryList
         get() = when (Site.current) {
             Site.ANIME -> anime
             Site.RANOBE -> novels
             Site.MANGA -> manga
+            Site.HENTAI -> hentai
         }
 
     val items get() = current.items
@@ -209,6 +215,7 @@ object HistoryStore {
         anime.load()
         novels.load()
         manga.load()
+        hentai.load()
     }
 
     fun recordChapter(title: Title, chapterId: Int, chapterTitle: String) {

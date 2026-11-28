@@ -24,11 +24,15 @@ enum class Site(
     MANGA(
         "manga", "1", "https://mangalib.me/", "https://mangalib.me", "/manga", "manga", "Манга",
         "https://mangalib.me/ru/manga/",
+    ),
+    HENTAI(
+        "hentai", "4", "https://kz.hentailib.me/", "https://kz.hentailib.me", "/manga", "manga", "Хентай",
+        "https://kz.hentailib.me/ru/manga/",
     );
 
     val isAnime: Boolean get() = this == ANIME
     val isRanobe: Boolean get() = this == RANOBE
-    val isManga: Boolean get() = this == MANGA
+    val isManga: Boolean get() = this == MANGA || this == HENTAI
 
     /** Ранобэ и манга устроены одинаково: тайтл, тома и главы. */
     val isBook: Boolean get() = this != ANIME

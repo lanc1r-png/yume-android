@@ -107,7 +107,7 @@ fun ProfileShowcase(total: Int) {
             { t ->
                 if (!book) null else {
                     val all = FavMetaStore.count(t) ?: 0
-                    val done = ReadStore.read[(if (site.isManga) -t.id else t.id).toString()]?.size ?: 0
+                    val done = ReadStore.read[t.readKey.toString()]?.size ?: 0
                     if (all > 0 && done > 0) minOf(1f, done.toFloat() / all) else null
                 }
             },
