@@ -56,11 +56,14 @@ object Kodik {
 
     suspend fun resolve(pageUrl: String): List<Pair<Int, String>> {
         var last: KodikException? = null
+        // Как в iOS значение параметра обрезается по первому «\», у нас — целиком; пробуем оба варианта.
         for (ua in listOf(UA_IOS, UA)) {
-            try {
-                return resolveOnce(pageUrl, ua)
-            } catch (e: KodikException) {
-                last = e
+            for (cut in listOf(true, false)) {
+                try {
+                    return resolveOnce(pageUrl, ua, cut)
+                } catch (e: KodikException) {
+                    last = e
+                }
             }
         }
         // Запрос «изнутри» настоящей страницы плеера: те же куки, TLS и подписи, что у браузера.
@@ -146,14 +149,14 @@ object Kodik {
         return linksFrom("[$code] $text")
     }
 
-    private suspend fun resolveOnce(pageUrl: String, ua: String): List<Pair<Int, String>> {
+    private suspend fun resolveOnce(pageUrl: String, ua: String, cutAtSlash: Boolean): List<Pair<Int, String>> {
         val client = Api.httpClient.newBuilder().cookieJar(MemoryJar()).build()
         val html = fetch(client, ua, pageUrl, "https://animelib.org/")
         val params = HashMap<String, String>()
         for (k in listOf("d", "d_sign", "pd", "pd_sign", "ref", "ref_sign")) {
             // значение может содержать экранированные слэши (https:\/\/site\/), их нельзя обрезать
             match("\\\\?[\"']" + k + "\\\\?[\"']\\s*:\\s*\\\\?[\"']((?:[^\"'\\\\]|\\\\/)*)", html)
-                ?.let { params[k] = it.replace("\\/", "/") }
+                ?.let { params[k] = if (cutAtSlash) it.substringBefore("\\") else it.replace("\\/", "/") }
         }
         if (params["d_sign"] == null || params["pd_sign"] == null) throw KodikException("ответ Kodik: нет параметров плеера")
 
